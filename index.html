@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Porqueriza | Gestión Integral</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans">
+
+  <!-- PANTALLA DE LOGIN -->
+  <div id="login-screen" class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+      <div class="text-center mb-6">
+        <h1 class="text-2xl font-bold text-emerald-700">Sistema Porqueriza</h1>
+        <p class="text-sm text-slate-500">Inicia sesión para gestionar la granja</p>
+      </div>
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Correo electrónico</label>
+          <input type="email" id="login-email" required class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="correo@ejemplo.com" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Contraseña</label>
+          <input type="password" id="login-password" required class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="••••••••" />
+        </div>
+        <p id="login-error" class="text-red-600 text-sm hidden"></p>
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-lg transition">
+          Ingresar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- APLICACIÓN PRINCIPAL -->
+  <div id="app-screen" class="hidden min-h-screen flex flex-col">
+    <!-- Barra superior -->
+    <header class="bg-emerald-800 text-white px-4 py-3 shadow flex justify-between items-center">
+      <div>
+        <span class="font-bold text-lg">Porqueriza Control</span>
+        <span id="user-badge" class="ml-2 text-xs bg-emerald-700 px-2 py-1 rounded"></span>
+      </div>
+      <button id="logout-btn" class="text-sm bg-emerald-900 hover:bg-red-700 px-3 py-1.5 rounded transition">
+        Cerrar sesión
+      </button>
+    </header>
+
+    <!-- Navegación por módulos -->
+    <nav class="bg-white border-b px-4 py-2 flex gap-2 overflow-x-auto text-sm font-medium">
+      <button onclick="cambiarTab('dashboard')" class="tab-btn px-3 py-1.5 rounded bg-emerald-100 text-emerald-800" data-tab="dashboard">Dashboard</button>
+      <button onclick="cambiarTab('lotes')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="lotes">Lotes y Pesajes</button>
+      <button onclick="cambiarTab('alimento')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="alimento">Alimento e Inventario</button>
+      <button onclick="cambiarTab('operaciones')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="operaciones">Mortalidad y Sanidad</button>
+      <button onclick="cambiarTab('ventas')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="ventas">Ventas y Cartera</button>
+    </nav>
+
+    <!-- Contenido -->
+    <main class="flex-1 p-4 max-w-7xl w-full mx-auto">
+
+      <!-- TAB 1: DASHBOARD GERENCIAL -->
+      <section id="tab-dashboard" class="tab-content space-y-6">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xl font-bold">Indicadores Generales del Mes</h2>
+          <button onclick="cargarDashboard()" class="text-sm bg-white border px-3 py-1.5 rounded hover:bg-slate-50">Actualizar</button>
+        </div>
+        <div id="kpi-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+
+        <div class="bg-white p-4 rounded-xl shadow-sm">
+          <h3 class="font-bold mb-3 text-slate-700">Rentabilidad y Estado por Lote</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left border-collapse">
+              <thead class="bg-slate-50 text-slate-600 border-b">
+                <tr>
+                  <th class="p-2">Código</th>
+                  <th class="p-2">Lote</th>
+                  <th class="p-2">Disponibles</th>
+                  <th class="p-2">Mortalidad</th>
+                  <th class="p-2">Costo Acum.</th>
+                  <th class="p-2">Ventas</th>
+                  <th class="p-2">Resultado Bruto</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-rentabilidad-lotes" class="divide-y"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: LOTES Y PESAJES -->
+      <section id="tab-lotes" class="tab-content hidden space-y-6">
+        <div class="grid md:grid-cols-2 gap-6">
+          <!-- Crear Lote -->
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-4">Registrar Nuevo Lote</h3>
+            <form id="form-lote" class="space-y-3 text-sm">
+              <div class="grid grid-cols-2 gap-3">
+                <input type="text" name="codigo" placeholder="Código (ej. L-001)" required class="border rounded p-2" />
+                <input type="text" name="nombre" placeholder="Nombre del lote" required class="border rounded p-2" />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <select name="tipo" class="border rounded p-2">
+                  <option value="ENGORDE">ENGORDE</option>
+                  <option value="CRIA">CRIA</option>
+                  <option value="REPRODUCCION">REPRODUCCION</option>
+                </select>
+                <select name="origen" class="border rounded p-2">
+                  <option value="COMPRADO">COMPRADO</option>
+                  <option value="NACIDO_PROPIO">NACIDO PROPIO</option>
+                </select>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs text-slate-500">Fecha Inicio</label>
+                  <input type="date" name="fecha_inicio" required class="w-full border rounded p-2" />
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500">Cant. Cerdos</label>
+                  <input type="number" name="cantidad_inicial" min="1" required class="w-full border rounded p-2" />
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <input type="number" step="0.01" name="peso_inicial_promedio_kg" placeholder="Peso prom. inicial (kg)" required class="border rounded p-2" />
+                <input type="number" step="0.01" name="precio_unitario" placeholder="Costo unitario ($)" required class="border rounded p-2" />
+              </div>
+              <button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded font-semibold hover:bg-emerald-700">Guardar Lote</button>
+            </form>
+          </div>
+
+          <!-- Registrar Pesaje -->
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-4">Registrar Muestreo de Peso</h3>
+            <form id="form-pesaje" class="space-y-3 text-sm">
+              <select name="lote_id" id="select-lote-pesaje" required class="w-full border rounded p-2">
+                <option value="">Selecciona un lote activo...</option>
+              </select>
+              <div class="grid grid-cols-2 gap-3">
+                <input type="date" name="fecha" required class="border rounded p-2" />
+                <input type="number" name="cantidad_pesada" min="1" placeholder="Cerdos pesados" required class="border rounded p-2" />
+              </div>
+              <input type="number" step="0.01" name="peso_total_kg" placeholder="Peso total de la muestra (kg)" required class="w-full border rounded p-2" />
+              <input type="text" name="observaciones" placeholder="Observaciones (opcional)" class="w-full border rounded p-2" />
+              <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700">Guardar Pesaje</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Tabla de Conversión Alimenticia -->
+        <div class="bg-white p-4 rounded-xl shadow-sm">
+          <h3 class="font-bold mb-3">Conversión Alimenticia y Ganancia Diaria de Peso (GDP)</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="bg-slate-50 border-b">
+                <tr>
+                  <th class="p-2">Lote</th>
+                  <th class="p-2">Días</th>
+                  <th class="p-2">Peso Inicial</th>
+                  <th class="p-2">Último Peso</th>
+                  <th class="p-2">GDP (kg/día)</th>
+                  <th class="p-2">Alimento (kg)</th>
+                  <th class="p-2">Conv. Alimenticia</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-conversion" class="divide-y"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: ALIMENTO E INVENTARIO -->
+      <section id="tab-alimento" class="tab-content hidden space-y-6">
+        <div class="grid md:grid-cols-2 gap-6">
+          <!-- Despacho de alimento -->
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-4">Registrar Consumo / Despacho a Lote</h3>
+            <form id="form-despacho" class="space-y-3 text-sm">
+              <select name="lote_id" id="select-lote-despacho" required class="w-full border rounded p-2">
+                <option value="">Selecciona lote...</option>
+              </select>
+              <select name="alimento_id" id="select-alimento-despacho" required class="w-full border rounded p-2">
+                <option value="">Selecciona alimento...</option>
+              </select>
+              <div class="grid grid-cols-2 gap-3">
+                <input type="date" name="fecha" required class="border rounded p-2" />
+                <input type="number" step="0.01" name="cantidad" placeholder="Cantidad (Bultos/Unid)" required class="border rounded p-2" />
+              </div>
+              <p class="text-xs text-slate-500">* El costo unitario se toma automáticamente del promedio en inventario.</p>
+              <button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded font-semibold hover:bg-emerald-700">Registrar Despacho</button>
+            </form>
+          </div>
+
+          <!-- Stock Actual -->
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-4">Inventario Actual de Alimento</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm text-left">
+                <thead class="bg-slate-50 border-b">
+                  <tr>
+                    <th class="p-2">Alimento</th>
+                    <th class="p-2">Stock</th>
+                    <th class="p-2">Costo Prom.</th>
+                    <th class="p-2">Valor Total</th>
+                  </tr>
+                </thead>
+                <tbody id="tabla-stock-alimento" class="divide-y"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: MORTALIDAD Y SANIDAD -->
+      <section id="tab-operaciones" class="tab-content hidden">
+        <div class="bg-white p-5 rounded-xl shadow-sm max-w-lg">
+          <h3 class="font-bold text-lg mb-4">Reportar Mortalidad en Lote</h3>
+          <form id="form-mortalidad" class="space-y-3 text-sm">
+            <select name="lote_id" id="select-lote-mortalidad" required class="w-full border rounded p-2">
+              <option value="">Selecciona lote...</option>
+            </select>
+            <div class="grid grid-cols-2 gap-3">
+              <input type="date" name="fecha" required class="border rounded p-2" />
+              <input type="number" name="cantidad" min="1" placeholder="Cantidad fallecidos" required class="border rounded p-2" />
+            </div>
+            <input type="text" name="causa" placeholder="Causa probable" required class="w-full border rounded p-2" />
+            <textarea name="notas" placeholder="Observaciones" class="w-full border rounded p-2"></textarea>
+            <button type="submit" class="w-full bg-red-600 text-white py-2 rounded font-semibold hover:bg-red-700">Registrar Mortalidad</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- TAB 5: VENTAS Y CARTERA -->
+      <section id="tab-ventas" class="tab-content hidden">
+        <div class="bg-white p-5 rounded-xl shadow-sm">
+          <h3 class="font-bold text-lg mb-4">Estado de Ventas y Cartera</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="bg-slate-50 border-b">
+                <tr>
+                  <th class="p-2">Fecha</th>
+                  <th class="p-2">Lote</th>
+                  <th class="p-2">Cliente</th>
+                  <th class="p-2">Cerdos / Kilos</th>
+                  <th class="p-2">Total</th>
+                  <th class="p-2">Saldo</th>
+                  <th class="p-2">Estado</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-ventas" class="divide-y"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
