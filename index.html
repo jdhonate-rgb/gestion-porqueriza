@@ -6,79 +6,76 @@
   <title>Porqueriza | Gestión Integral</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Librería para exportar a Excel (.xlsx) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <style>
+    @media print {
+      header, nav, .no-print { display: none !important; }
+      body { background: white !important; }
+      .print-area { box-shadow: none !important; border: none !important; }
+    }
+  </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans">
 
-  <!-- PANTALLA DE LOGIN -->
+  <!-- LOGIN -->
   <div id="login-screen" class="min-h-screen flex items-center justify-center p-4">
     <div class="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
       <div class="text-center mb-6">
         <h1 class="text-2xl font-bold text-emerald-700">Sistema Porqueriza</h1>
-        <p class="text-sm text-slate-500">Inicia sesión para gestionar la granja</p>
+        <p class="text-sm text-slate-500">Acceso autorizado</p>
       </div>
       <form id="login-form" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium mb-1">Correo electrónico</label>
-          <input type="email" id="login-email" required class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="correo@ejemplo.com" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Contraseña</label>
-          <input type="password" id="login-password" required class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="••••••••" />
-        </div>
+        <input type="email" id="login-email" required class="w-full border rounded-lg px-3 py-2" placeholder="Correo electrónico" />
+        <input type="password" id="login-password" required class="w-full border rounded-lg px-3 py-2" placeholder="Contraseña" />
         <p id="login-error" class="text-red-600 text-sm hidden"></p>
-        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-lg transition">
-          Ingresar
-        </button>
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-lg">Ingresar</button>
       </form>
     </div>
   </div>
 
-  <!-- APLICACIÓN PRINCIPAL -->
+  <!-- APP PRINCIPAL -->
   <div id="app-screen" class="hidden min-h-screen flex flex-col">
-    <!-- Barra superior -->
-    <header class="bg-emerald-800 text-white px-4 py-3 shadow flex justify-between items-center">
+    <header class="bg-emerald-900 text-white px-4 py-3 shadow flex justify-between items-center">
       <div>
         <span class="font-bold text-lg">Porqueriza Control</span>
         <span id="user-badge" class="ml-2 text-xs bg-emerald-700 px-2 py-1 rounded"></span>
       </div>
-      <button id="logout-btn" class="text-sm bg-emerald-900 hover:bg-red-700 px-3 py-1.5 rounded transition">
-        Cerrar sesión
-      </button>
+      <button id="logout-btn" class="text-sm bg-emerald-950 hover:bg-red-700 px-3 py-1.5 rounded">Cerrar sesión</button>
     </header>
 
-    <!-- Navegación por módulos -->
+    <!-- MENÚ DE MÓDULOS -->
     <nav class="bg-white border-b px-4 py-2 flex gap-2 overflow-x-auto text-sm font-medium">
       <button onclick="cambiarTab('dashboard')" class="tab-btn px-3 py-1.5 rounded bg-emerald-100 text-emerald-800" data-tab="dashboard">Dashboard</button>
+      <button onclick="cambiarTab('ventas')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="ventas">Ventas y Ruta Cobro</button>
+      <button onclick="cambiarTab('bancos')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="bancos">Bancos y Flujo Caja</button>
+      <button onclick="cambiarTab('compras')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="compras">Compras y Medicamentos</button>
       <button onclick="cambiarTab('lotes')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="lotes">Lotes y Pesajes</button>
-      <button onclick="cambiarTab('alimento')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="alimento">Alimento e Inventario</button>
-      <button onclick="cambiarTab('operaciones')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="operaciones">Mortalidad y Sanidad</button>
-      <button onclick="cambiarTab('ventas')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="ventas">Ventas y Cartera</button>
+      <button onclick="cambiarTab('reportes')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="reportes">Reportes PDF / Excel</button>
+      <button onclick="cambiarTab('config')" class="tab-btn px-3 py-1.5 rounded hover:bg-slate-100" data-tab="config">Configuración</button>
     </nav>
 
-    <!-- Contenido -->
     <main class="flex-1 p-4 max-w-7xl w-full mx-auto">
 
-      <!-- TAB 1: DASHBOARD GERENCIAL -->
+      <!-- 1. DASHBOARD -->
       <section id="tab-dashboard" class="tab-content space-y-6">
         <div class="flex justify-between items-center">
           <h2 class="text-xl font-bold">Indicadores Generales del Mes</h2>
-          <button onclick="cargarDashboard()" class="text-sm bg-white border px-3 py-1.5 rounded hover:bg-slate-50">Actualizar</button>
+          <button onclick="cargarTodo()" class="text-sm bg-white border px-3 py-1.5 rounded hover:bg-slate-50">Actualizar</button>
         </div>
         <div id="kpi-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
-
         <div class="bg-white p-4 rounded-xl shadow-sm">
-          <h3 class="font-bold mb-3 text-slate-700">Rentabilidad y Estado por Lote</h3>
+          <h3 class="font-bold mb-3">Rentabilidad por Lote</h3>
           <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left border-collapse">
-              <thead class="bg-slate-50 text-slate-600 border-b">
+            <table class="w-full text-sm text-left">
+              <thead class="bg-slate-50 border-b">
                 <tr>
-                  <th class="p-2">Código</th>
                   <th class="p-2">Lote</th>
                   <th class="p-2">Disponibles</th>
                   <th class="p-2">Mortalidad</th>
                   <th class="p-2">Costo Acum.</th>
                   <th class="p-2">Ventas</th>
-                  <th class="p-2">Resultado Bruto</th>
+                  <th class="p-2">Resultado</th>
                 </tr>
               </thead>
               <tbody id="tabla-rentabilidad-lotes" class="divide-y"></tbody>
@@ -87,171 +84,416 @@
         </div>
       </section>
 
-      <!-- TAB 2: LOTES Y PESAJES -->
-      <section id="tab-lotes" class="tab-content hidden space-y-6">
-        <div class="grid md:grid-cols-2 gap-6">
-          <!-- Crear Lote -->
-          <div class="bg-white p-5 rounded-xl shadow-sm">
-            <h3 class="font-bold text-lg mb-4">Registrar Nuevo Lote</h3>
-            <form id="form-lote" class="space-y-3 text-sm">
-              <div class="grid grid-cols-2 gap-3">
-                <input type="text" name="codigo" placeholder="Código (ej. L-001)" required class="border rounded p-2" />
-                <input type="text" name="nombre" placeholder="Nombre del lote" required class="border rounded p-2" />
-              </div>
-              <div class="grid grid-cols-2 gap-3">
-                <select name="tipo" class="border rounded p-2">
-                  <option value="ENGORDE">ENGORDE</option>
-                  <option value="CRIA">CRIA</option>
-                  <option value="REPRODUCCION">REPRODUCCION</option>
-                </select>
-                <select name="origen" class="border rounded p-2">
-                  <option value="COMPRADO">COMPRADO</option>
-                  <option value="NACIDO_PROPIO">NACIDO PROPIO</option>
-                </select>
-              </div>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="text-xs text-slate-500">Fecha Inicio</label>
-                  <input type="date" name="fecha_inicio" required class="w-full border rounded p-2" />
-                </div>
-                <div>
-                  <label class="text-xs text-slate-500">Cant. Cerdos</label>
-                  <input type="number" name="cantidad_inicial" min="1" required class="w-full border rounded p-2" />
-                </div>
-              </div>
-              <div class="grid grid-cols-2 gap-3">
-                <input type="number" step="0.01" name="peso_inicial_promedio_kg" placeholder="Peso prom. inicial (kg)" required class="border rounded p-2" />
-                <input type="number" step="0.01" name="precio_unitario" placeholder="Costo unitario ($)" required class="border rounded p-2" />
-              </div>
-              <button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded font-semibold hover:bg-emerald-700">Guardar Lote</button>
-            </form>
-          </div>
-
-          <!-- Registrar Pesaje -->
-          <div class="bg-white p-5 rounded-xl shadow-sm">
-            <h3 class="font-bold text-lg mb-4">Registrar Muestreo de Peso</h3>
-            <form id="form-pesaje" class="space-y-3 text-sm">
-              <select name="lote_id" id="select-lote-pesaje" required class="w-full border rounded p-2">
-                <option value="">Selecciona un lote activo...</option>
-              </select>
-              <div class="grid grid-cols-2 gap-3">
-                <input type="date" name="fecha" required class="border rounded p-2" />
-                <input type="number" name="cantidad_pesada" min="1" placeholder="Cerdos pesados" required class="border rounded p-2" />
-              </div>
-              <input type="number" step="0.01" name="peso_total_kg" placeholder="Peso total de la muestra (kg)" required class="w-full border rounded p-2" />
-              <input type="text" name="observaciones" placeholder="Observaciones (opcional)" class="w-full border rounded p-2" />
-              <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700">Guardar Pesaje</button>
-            </form>
-          </div>
+      <!-- 2. VENTAS: RUTA POR COBRAR Y ENTREGAS -->
+      <section id="tab-ventas" class="tab-content hidden space-y-4">
+        <div class="flex gap-2 border-b pb-2">
+          <button onclick="cambiarSubTabVentas('ruta')" id="btn-sub-ruta" class="px-4 py-2 rounded-lg font-semibold bg-amber-600 text-white text-sm">
+            Ruta por Cobrar (Deudores)
+          </button>
+          <button onclick="cambiarSubTabVentas('entregas')" id="btn-sub-entregas" class="px-4 py-2 rounded-lg font-semibold bg-white border text-slate-700 text-sm">
+            Entregas (Nueva Venta)
+          </button>
         </div>
 
-        <!-- Tabla de Conversión Alimenticia -->
-        <div class="bg-white p-4 rounded-xl shadow-sm">
-          <h3 class="font-bold mb-3">Conversión Alimenticia y Ganancia Diaria de Peso (GDP)</h3>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-              <thead class="bg-slate-50 border-b">
-                <tr>
-                  <th class="p-2">Lote</th>
-                  <th class="p-2">Días</th>
-                  <th class="p-2">Peso Inicial</th>
-                  <th class="p-2">Último Peso</th>
-                  <th class="p-2">GDP (kg/día)</th>
-                  <th class="p-2">Alimento (kg)</th>
-                  <th class="p-2">Conv. Alimenticia</th>
-                </tr>
-              </thead>
-              <tbody id="tabla-conversion" class="divide-y"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- TAB 3: ALIMENTO E INVENTARIO -->
-      <section id="tab-alimento" class="tab-content hidden space-y-6">
-        <div class="grid md:grid-cols-2 gap-6">
-          <!-- Despacho de alimento -->
-          <div class="bg-white p-5 rounded-xl shadow-sm">
-            <h3 class="font-bold text-lg mb-4">Registrar Consumo / Despacho a Lote</h3>
-            <form id="form-despacho" class="space-y-3 text-sm">
-              <select name="lote_id" id="select-lote-despacho" required class="w-full border rounded p-2">
-                <option value="">Selecciona lote...</option>
-              </select>
-              <select name="alimento_id" id="select-alimento-despacho" required class="w-full border rounded p-2">
-                <option value="">Selecciona alimento...</option>
-              </select>
-              <div class="grid grid-cols-2 gap-3">
-                <input type="date" name="fecha" required class="border rounded p-2" />
-                <input type="number" step="0.01" name="cantidad" placeholder="Cantidad (Bultos/Unid)" required class="border rounded p-2" />
-              </div>
-              <p class="text-xs text-slate-500">* El costo unitario se toma automáticamente del promedio en inventario.</p>
-              <button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded font-semibold hover:bg-emerald-700">Registrar Despacho</button>
-            </form>
+        <!-- SUBTAB A: RUTA POR COBRAR -->
+        <div id="subtab-ruta" class="space-y-4">
+          <div class="bg-white p-4 rounded-xl shadow-sm">
+            <div class="flex justify-between items-center mb-3">
+              <h3 class="font-bold text-lg text-amber-800">Ruta de Cobro Activa</h3>
+              <span id="total-ruta-cobro" class="font-bold text-red-600 text-lg"></span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm text-left">
+                <thead class="bg-amber-50 border-b text-amber-900">
+                  <tr>
+                    <th class="p-2">Cliente / Teléfono</th>
+                    <th class="p-2">Dirección</th>
+                    <th class="p-2">Fecha Venta</th>
+                    <th class="p-2">Cuotas</th>
+                    <th class="p-2">Próx. Cobro</th>
+                    <th class="p-2">Total Venta</th>
+                    <th class="p-2">Saldo Pendiente</th>
+                    <th class="p-2">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tabla-ruta-cobro" class="divide-y"></tbody>
+              </table>
+            </div>
           </div>
 
-          <!-- Stock Actual -->
-          <div class="bg-white p-5 rounded-xl shadow-sm">
-            <h3 class="font-bold text-lg mb-4">Inventario Actual de Alimento</h3>
+          <!-- Historial completo de ventas -->
+          <div class="bg-white p-4 rounded-xl shadow-sm">
+            <h3 class="font-bold mb-3">Historial General de Ventas</h3>
             <div class="overflow-x-auto">
               <table class="w-full text-sm text-left">
                 <thead class="bg-slate-50 border-b">
                   <tr>
-                    <th class="p-2">Alimento</th>
-                    <th class="p-2">Stock</th>
-                    <th class="p-2">Costo Prom.</th>
-                    <th class="p-2">Valor Total</th>
+                    <th class="p-2">Fecha</th>
+                    <th class="p-2">Cliente</th>
+                    <th class="p-2">Lote</th>
+                    <th class="p-2">Cerdos / Kilos</th>
+                    <th class="p-2">Modalidad</th>
+                    <th class="p-2">Total</th>
+                    <th class="p-2">Saldo</th>
+                    <th class="p-2">Detalle</th>
                   </tr>
                 </thead>
-                <tbody id="tabla-stock-alimento" class="divide-y"></tbody>
+                <tbody id="tabla-ventas-historial" class="divide-y"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUBTAB B: ENTREGAS (FORMULARIO DE VENTAS) -->
+        <div id="subtab-entregas" class="hidden grid md:grid-cols-2 gap-6">
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-4 text-emerald-800">Registrar Entrega / Venta de Cerdos</h3>
+            <form id="form-venta" class="space-y-3 text-sm">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs text-slate-500">Fecha Entrega</label>
+                  <input type="date" name="fecha" id="venta-fecha" required class="w-full border rounded p-2" />
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500">Lote Origen</label>
+                  <select name="lote_id" id="select-lote-venta" required class="w-full border rounded p-2"></select>
+                </div>
+              </div>
+
+              <div>
+                <label class="text-xs text-slate-500">Cliente</label>
+                <select name="cliente_id" id="select-cliente-venta" required class="w-full border rounded p-2"></select>
+              </div>
+
+              <div class="grid grid-cols-3 gap-2">
+                <div>
+                  <label class="text-xs text-slate-500">Cant. Cerdos</label>
+                  <input type="number" name="cantidad_cerdos" min="1" required class="w-full border rounded p-2" />
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500">Kilos Totales</label>
+                  <input type="number" step="0.01" name="kilos" id="venta-kilos" required class="w-full border rounded p-2" oninput="calcularTotalVenta()" />
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500">Precio x Kilo ($)</label>
+                  <input type="number" step="0.01" name="precio_kilo" id="venta-precio-kilo" required class="w-full border rounded p-2" oninput="calcularTotalVenta()" />
+                </div>
+              </div>
+
+              <div class="bg-emerald-50 p-3 rounded border border-emerald-200 flex justify-between items-center">
+                <span class="font-semibold text-emerald-900">Total a Cobrar:</span>
+                <span id="venta-total-preview" class="text-xl font-bold text-emerald-700">$ 0</span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs text-slate-500">Tipo de Pago</label>
+                  <select name="tipo_pago" id="venta-tipo-pago" onchange="toggleCamposCredito()" class="w-full border rounded p-2">
+                    <option value="CONTADO">CONTADO (Pago Total)</option>
+                    <option value="CREDITO">CRÉDITO / CUOTAS</option>
+                    <option value="MIXTO">ABONO INICIAL + SALDO</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500">Cuenta Destino del Dinero</label>
+                  <select name="cuenta_id" id="select-cuenta-venta" class="w-full border rounded p-2"></select>
+                </div>
+              </div>
+
+              <div id="bloque-credito" class="hidden grid grid-cols-3 gap-2 bg-amber-50 p-3 rounded border border-amber-200">
+                <div>
+                  <label class="text-xs text-amber-900">Abono Inicial ($)</label>
+                  <input type="number" step="0.01" name="abono_inicial" value="0" class="w-full border rounded p-2 bg-white" />
+                </div>
+                <div>
+                  <label class="text-xs text-amber-900">N° Cuotas</label>
+                  <input type="number" min="1" name="numero_cuotas" value="1" class="w-full border rounded p-2 bg-white" />
+                </div>
+                <div>
+                  <label class="text-xs text-amber-900">Próx. Cobro</label>
+                  <input type="date" name="fecha_proximo_cobro" class="w-full border rounded p-2 bg-white" />
+                </div>
+              </div>
+
+              <input type="text" name="notas" placeholder="Observaciones de entrega" class="w-full border rounded p-2" />
+              <button type="submit" class="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-bold hover:bg-emerald-700">Guardar Venta</button>
+            </form>
+          </div>
+
+          <!-- Registro rápido de nuevo cliente -->
+          <div class="bg-white p-5 rounded-xl shadow-sm h-fit">
+            <h3 class="font-bold text-lg mb-3">Crear Cliente Rápido</h3>
+            <form id="form-cliente" class="space-y-3 text-sm">
+              <input type="text" name="nombre" placeholder="Nombre completo del cliente" required class="w-full border rounded p-2" />
+              <div class="grid grid-cols-2 gap-2">
+                <input type="text" name="telefono" placeholder="Teléfono / WhatsApp" required class="w-full border rounded p-2" />
+                <input type="text" name="documento" placeholder="Cédula / NIT" class="w-full border rounded p-2" />
+              </div>
+              <input type="text" name="direccion" placeholder="Dirección / Ruta / Barrio" required class="w-full border rounded p-2" />
+              <button type="submit" class="w-full bg-slate-800 text-white py-2 rounded font-semibold hover:bg-slate-900">Guardar Cliente</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. BANCOS Y FLUJO DE CAJA DINÁMICO -->
+      <section id="tab-bancos" class="tab-content hidden space-y-6">
+        <div class="grid md:grid-cols-3 gap-4" id="cards-cuentas-bancarias"></div>
+
+        <div class="grid md:grid-cols-3 gap-6">
+          <!-- Crear Cuenta Bancaria / Caja -->
+          <div class="bg-white p-5 rounded-xl shadow-sm h-fit">
+            <h3 class="font-bold text-lg mb-3">Nueva Cuenta / Caja</h3>
+            <form id="form-cuenta" class="space-y-3 text-sm">
+              <input type="text" name="nombre" placeholder="Ej. Bancolombia Ahorros / Nequi" required class="w-full border rounded p-2" />
+              <select name="tipo" class="w-full border rounded p-2">
+                <option value="BANCO">BANCO</option>
+                <option value="BILLETERA">BILLETERA DIGITAL</option>
+                <option value="EFECTIVO">EFECTIVO / CAJA</option>
+              </select>
+              <input type="text" name="numero_cuenta" placeholder="Número de cuenta (opcional)" class="w-full border rounded p-2" />
+              <input type="number" step="0.01" name="saldo_inicial" placeholder="Saldo Inicial ($)" required class="w-full border rounded p-2" />
+              <button type="submit" class="w-full bg-blue-700 text-white py-2 rounded font-semibold">Crear Cuenta</button>
+            </form>
+          </div>
+
+          <!-- Movimientos dinámicos filtrados por fecha y cuenta -->
+          <div class="md:col-span-2 bg-white p-5 rounded-xl shadow-sm space-y-4">
+            <div class="flex flex-wrap gap-2 items-end justify-between border-b pb-3">
+              <div>
+                <h3 class="font-bold text-lg">Flujo de Movimientos</h3>
+                <p class="text-xs text-slate-500">Filtra entradas y salidas por cuenta y rango de fechas</p>
+              </div>
+              <div class="flex flex-wrap gap-2 text-xs">
+                <select id="filtro-cuenta-mov" onchange="cargarMovimientosCuenta()" class="border rounded p-2 bg-slate-50">
+                  <option value="">Todas las cuentas</option>
+                </select>
+                <input type="date" id="filtro-desde-mov" onchange="cargarMovimientosCuenta()" class="border rounded p-2" />
+                <input type="date" id="filtro-hasta-mov" onchange="cargarMovimientosCuenta()" class="border rounded p-2" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3 text-center text-sm">
+              <div class="bg-emerald-50 p-2 rounded">
+                <span class="text-xs text-emerald-700 block">Entradas Período</span>
+                <strong id="mov-total-entradas" class="text-emerald-800">$ 0</strong>
+              </div>
+              <div class="bg-red-50 p-2 rounded">
+                <span class="text-xs text-red-700 block">Salidas Período</span>
+                <strong id="mov-total-salidas" class="text-red-800">$ 0</strong>
+              </div>
+              <div class="bg-slate-100 p-2 rounded">
+                <span class="text-xs text-slate-600 block">Balance Período</span>
+                <strong id="mov-balance-periodo" class="text-slate-900">$ 0</strong>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm text-left">
+                <thead class="bg-slate-50 border-b">
+                  <tr>
+                    <th class="p-2">Fecha</th>
+                    <th class="p-2">Cuenta</th>
+                    <th class="p-2">Tipo</th>
+                    <th class="p-2">Detalle / Concepto</th>
+                    <th class="p-2">Valor</th>
+                  </tr>
+                </thead>
+                <tbody id="tabla-movimientos-cuenta" class="divide-y"></tbody>
               </table>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- TAB 4: MORTALIDAD Y SANIDAD -->
-      <section id="tab-operaciones" class="tab-content hidden">
-        <div class="bg-white p-5 rounded-xl shadow-sm max-w-lg">
-          <h3 class="font-bold text-lg mb-4">Reportar Mortalidad en Lote</h3>
-          <form id="form-mortalidad" class="space-y-3 text-sm">
-            <select name="lote_id" id="select-lote-mortalidad" required class="w-full border rounded p-2">
-              <option value="">Selecciona lote...</option>
-            </select>
-            <div class="grid grid-cols-2 gap-3">
-              <input type="date" name="fecha" required class="border rounded p-2" />
-              <input type="number" name="cantidad" min="1" placeholder="Cantidad fallecidos" required class="border rounded p-2" />
-            </div>
-            <input type="text" name="causa" placeholder="Causa probable" required class="w-full border rounded p-2" />
-            <textarea name="notas" placeholder="Observaciones" class="w-full border rounded p-2"></textarea>
-            <button type="submit" class="w-full bg-red-600 text-white py-2 rounded font-semibold hover:bg-red-700">Registrar Mortalidad</button>
-          </form>
+      <!-- 4. COMPRAS DE MEDICAMENTOS, ALIMENTOS Y GASTOS -->
+      <section id="tab-compras" class="tab-content hidden space-y-6">
+        <div class="grid md:grid-cols-2 gap-6">
+          <!-- Compra de Medicamentos / Gastos -->
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-4 text-blue-800">Registrar Compra de Medicamentos / Gasto</h3>
+            <form id="form-gasto-med" class="space-y-3 text-sm">
+              <div class="grid grid-cols-2 gap-3">
+                <input type="date" name="fecha" required class="border rounded p-2" />
+                <select name="categoria" class="border rounded p-2">
+                  <option value="MEDICAMENTOS">MEDICAMENTOS</option>
+                  <option value="VETERINARIO">VETERINARIO</option>
+                  <option value="MANO_DE_OBRA">MANO DE OBRA</option>
+                  <option value="SERVICIOS">SERVICIOS</option>
+                  <option value="TRANSPORTE">TRANSPORTE</option>
+                  <option value="OTRO">OTRO</option>
+                </select>
+              </div>
+              <select name="lote_id" id="select-lote-gasto" class="w-full border rounded p-2">
+                <option value="">General de la granja (sin lote específico)</option>
+              </select>
+              <input type="text" name="concepto" placeholder="Descripción (ej. Ivermectina 500ml, Vacuna Peste)" required class="w-full border rounded p-2" />
+              <div class="grid grid-cols-3 gap-2">
+                <input type="number" step="0.01" name="valor" placeholder="Valor Total ($)" required class="border rounded p-2" />
+                <select name="metodo_pago" class="border rounded p-2">
+                  <option value="EFECTIVO">EFECTIVO</option>
+                  <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                  <option value="CREDITO">CRÉDITO</option>
+                </select>
+                <select name="cuenta_id" id="select-cuenta-gasto" class="border rounded p-2"></select>
+              </div>
+              <button type="submit" class="w-full bg-blue-700 text-white py-2 rounded font-semibold hover:bg-blue-800">Registrar Compra / Gasto</button>
+            </form>
+          </div>
+
+          <!-- Compra de Alimento -->
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-4 text-emerald-800">Registrar Compra de Alimento</h3>
+            <form id="form-compra-alimento" class="space-y-3 text-sm">
+              <div class="grid grid-cols-2 gap-3">
+                <input type="date" name="fecha" required class="border rounded p-2" />
+                <select name="alimento_id" id="select-alimento-compra" required class="border rounded p-2"></select>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <input type="number" step="0.01" name="cantidad" placeholder="Cantidad bultos" required class="border rounded p-2" />
+                <input type="number" step="0.01" name="precio_unidad" placeholder="Precio por bulto ($)" required class="border rounded p-2" />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <select name="metodo_pago" class="border rounded p-2">
+                  <option value="EFECTIVO">EFECTIVO</option>
+                  <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                  <option value="CREDITO">CRÉDITO</option>
+                </select>
+                <select name="cuenta_id" id="select-cuenta-compra-alim" class="border rounded p-2"></select>
+              </div>
+              <button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded font-semibold hover:bg-emerald-700">Guardar Compra Alimento</button>
+            </form>
+          </div>
         </div>
       </section>
 
-      <!-- TAB 5: VENTAS Y CARTERA -->
-      <section id="tab-ventas" class="tab-content hidden">
-        <div class="bg-white p-5 rounded-xl shadow-sm">
-          <h3 class="font-bold text-lg mb-4">Estado de Ventas y Cartera</h3>
+      <!-- 5. LOTES, DESPACHOS Y PESAJES -->
+      <section id="tab-lotes" class="tab-content hidden space-y-6">
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-3">Crear Lote de Cerdos</h3>
+            <form id="form-lote" class="space-y-3 text-sm">
+              <div class="grid grid-cols-2 gap-2">
+                <input type="text" name="codigo" placeholder="Código (L-01)" required class="border rounded p-2" />
+                <input type="text" name="nombre" placeholder="Nombre del lote" required class="border rounded p-2" />
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <input type="date" name="fecha_inicio" required class="border rounded p-2" />
+                <input type="number" name="cantidad_inicial" placeholder="Cantidad cerdos" required class="border rounded p-2" />
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <input type="number" step="0.01" name="peso_inicial_promedio_kg" placeholder="Peso prom. inicial (kg)" required class="border rounded p-2" />
+                <input type="number" step="0.01" name="precio_unitario" placeholder="Costo unitario ($)" required class="border rounded p-2" />
+              </div>
+              <button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded font-semibold">Guardar Lote</button>
+            </form>
+          </div>
+
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-3">Despachar Alimento a Lote</h3>
+            <form id="form-despacho" class="space-y-3 text-sm">
+              <select name="lote_id" id="select-lote-despacho" required class="w-full border rounded p-2"></select>
+              <select name="alimento_id" id="select-alimento-despacho" required class="w-full border rounded p-2"></select>
+              <div class="grid grid-cols-2 gap-2">
+                <input type="date" name="fecha" required class="border rounded p-2" />
+                <input type="number" step="0.01" name="cantidad" placeholder="Bultos consumidos" required class="border rounded p-2" />
+              </div>
+              <button type="submit" class="w-full bg-slate-800 text-white py-2 rounded font-semibold">Registrar Consumo</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. REPORTES (EXPORTAR EXCEL Y PDF) -->
+      <section id="tab-reportes" class="tab-content hidden space-y-4">
+        <div class="bg-white p-5 rounded-xl shadow-sm print-area">
+          <div class="flex flex-wrap justify-between items-center gap-3 mb-4 no-print">
+            <div class="flex gap-2 items-center">
+              <label class="font-bold text-sm">Seleccionar Informe:</label>
+              <select id="tipo-reporte" onchange="cargarVistaReporte()" class="border rounded p-2 text-sm">
+                <option value="reporte_ventas_cartera">Ventas y Cartera de Clientes</option>
+                <option value="reporte_produccion_lotes">Rentabilidad y Producción por Lote</option>
+                <option value="reporte_gastos_categoria">Gastos y Medicamentos por Categoría</option>
+                <option value="resumen_cuentas_bancarias">Saldos en Bancos y Cajas</option>
+                <option value="reporte_conversion_alimenticia">Conversión Alimenticia y Peso</option>
+              </select>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="exportarExcel()" class="bg-emerald-700 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-emerald-800">
+                Exportar a Excel (.xlsx)
+              </button>
+              <button onclick="window.print()" class="bg-red-700 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-red-800">
+                Imprimir / Guardar PDF
+              </button>
+            </div>
+          </div>
+
+          <h3 id="titulo-reporte-impresion" class="text-lg font-bold mb-3">Informe General</h3>
           <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-              <thead class="bg-slate-50 border-b">
-                <tr>
-                  <th class="p-2">Fecha</th>
-                  <th class="p-2">Lote</th>
-                  <th class="p-2">Cliente</th>
-                  <th class="p-2">Cerdos / Kilos</th>
-                  <th class="p-2">Total</th>
-                  <th class="p-2">Saldo</th>
-                  <th class="p-2">Estado</th>
-                </tr>
-              </thead>
-              <tbody id="tabla-ventas" class="divide-y"></tbody>
-            </table>
+            <table id="tabla-reporte-dinamico" class="w-full text-xs text-left border"></table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. CONFIGURACIÓN -->
+      <section id="tab-config" class="tab-content hidden space-y-6">
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-3">Parámetros por Defecto</h3>
+            <form id="form-config-precio" class="space-y-3 text-sm">
+              <label class="block font-medium">Valor por defecto del Kilo de Cerdo ($)</label>
+              <input type="number" step="1" id="input-precio-defecto" required class="w-full border rounded p-2" />
+              <p class="text-xs text-slate-500">Este valor cargará automáticamente en el formulario de ventas, pero podrá modificarse manualmente en cada entrega.</p>
+              <button type="submit" class="bg-emerald-600 text-white px-4 py-2 rounded font-semibold">Guardar Precio Base</button>
+            </form>
+          </div>
+
+          <div class="bg-white p-5 rounded-xl shadow-sm">
+            <h3 class="font-bold text-lg mb-3">Crear Tipo de Alimento en Catálogo</h3>
+            <form id="form-catalogo-alimento" class="space-y-3 text-sm">
+              <div class="grid grid-cols-2 gap-2">
+                <input type="text" name="codigo" placeholder="Código (PRE-01)" required class="border rounded p-2" />
+                <input type="text" name="nombre" placeholder="Nombre (Preiniciador)" required class="border rounded p-2" />
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <input type="number" step="0.01" name="peso_por_unidad_kg" value="40" placeholder="Kilos por bulto" required class="border rounded p-2" />
+                <input type="number" step="0.01" name="stock_minimo" value="5" placeholder="Stock mínimo alerta" required class="border rounded p-2" />
+              </div>
+              <button type="submit" class="bg-slate-800 text-white px-4 py-2 rounded font-semibold">Agregar Alimento</button>
+            </form>
           </div>
         </div>
       </section>
 
     </main>
+  </div>
+
+  <!-- MODAL TARJETA DE DETALLE DE CLIENTE Y ABONOS -->
+  <div id="modal-cliente" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl max-w-lg w-full p-6 space-y-4 shadow-xl">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-lg" id="modal-cliente-titulo">Tarjeta de Crédito del Cliente</h3>
+        <button onclick="cerrarModalCliente()" class="text-slate-500 hover:text-black font-bold">✕</button>
+      </div>
+      <div id="modal-cliente-detalle" class="text-sm space-y-2 bg-slate-50 p-3 rounded"></div>
+
+      <form id="form-abono-venta" class="space-y-3 text-sm border-t pt-3">
+        <h4 class="font-bold text-emerald-800">Registrar Nuevo Abono / Cuota</h4>
+        <input type="hidden" id="abono-venta-id" />
+        <div class="grid grid-cols-2 gap-2">
+          <input type="date" id="abono-fecha" required class="border rounded p-2" />
+          <input type="number" step="0.01" id="abono-valor" placeholder="Valor recibido ($)" required class="border rounded p-2" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <select id="abono-medio" class="border rounded p-2">
+            <option value="EFECTIVO">EFECTIVO</option>
+            <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+          </select>
+          <select id="abono-cuenta-id" required class="border rounded p-2"></select>
+        </div>
+        <button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded font-bold">Aplicar Abono a la Deuda</button>
+      </form>
+    </div>
   </div>
 
   <script src="config.js"></script>
