@@ -1,6 +1,8 @@
 const moneda = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
 let precioKiloDefecto = 9500;
 let datosReporteActual = [];
+let sacrificiosCache = [];
+let disponibilidadLotesCache = [];
 
 // 1. AUTENTICACIÓN
 document.addEventListener('DOMContentLoaded', async () => {
@@ -25,17 +27,21 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   }
 });
 
-document.getElementById('logout-btn').addEventListener('click', async () => {
+async function cerrarSesion() {
   await supabaseClient.auth.signOut();
   location.reload();
-});
+}
 
 async function iniciarApp(user) {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
 
   const { data: perfil } = await supabaseClient.from('usuarios').select('nombre, rol').eq('auth_user_id', user.id).single();
-  if (perfil) document.getElementById('user-badge').textContent = `${perfil.nombre} (${perfil.rol})`;
+  if (perfil) {
+    const info = `${perfil.nombre} • ${perfil.rol}`;
+    document.getElementById('user-badge-desktop').textContent = info;
+    document.getElementById('user-badge-mobile').textContent = info;
+  }
 
   await cargarTodo();
 }
@@ -52,28 +58,50 @@ async function cargarTodo() {
   ]);
 }
 
-// 2. NAVEGACIÓN
-function cambiarTab(tabId) {
+// 2. NAVEGACIÓN ADAPTATIVA (PC SIDEBAR + MÓVIL BOTTOM BAR + DRAWER)
+function toggleMenuMovil() {
+  document.getElementById('drawer-movil').classList.toggle('hidden');
+}
+
+function cambiarTab(tabId, cerrarDrawer = false) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+  // Actualizar estado activo en Sidebar PC y Drawer
   document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.remove('bg-emerald-100', 'text-emerald-800');
-    if (btn.dataset.tab === tabId) btn.classList.add('bg-emerald-100', 'text-emerald-800');
+    const activo = btn.dataset.tab === tabId;
+    btn.classList.toggle('bg-emerald-700', activo);
+    btn.classList.toggle('text-white', activo);
+    btn.classList.toggle('text-emerald-100', !activo);
   });
+
+  // Actualizar estado activo en Barra Inferior Móvil
+  document.querySelectorAll('.bottom-btn').forEach(btn => {
+    const activo = btn.dataset.tab === tabId;
+    btn.classList.toggle('text-emerald-700', activo);
+    btn.classList.toggle('font-bold', activo);
+    btn.classList.toggle('text-slate-500', !activo);
+  });
+
+  if (cerrarDrawer) document.getElementById('drawer-movil').classList.add('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function cambiarSubTabVentas(sub) {
   document.getElementById('subtab-ruta').classList.toggle('hidden', sub !== 'ruta');
   document.getElementById('subtab-entregas').classList.toggle('hidden', sub !== 'entregas');
   document.getElementById('btn-sub-ruta').className = sub === 'ruta'
-    ? 'px-4 py-2 rounded-lg font-semibold bg-amber-600 text-white text-sm'
-    : 'px-4 py-2 rounded-lg font-semibold bg-white border text-slate-700 text-sm';
+    ? 'flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-bold bg-amber-600 text-white text-xs sm:text-sm shadow-sm'
+    : 'flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-bold bg-white border text-slate-700 text-xs sm:text-sm';
   document.getElementById('btn-sub-entregas').className = sub === 'entregas'
-    ? 'px-4 py-2 rounded-lg font-semibold bg-emerald-600 text-white text-sm'
-    : 'px-4 py-2 rounded-lg font-semibold bg-white border text-slate-700 text-sm';
+    ? 'flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-bold bg-emerald-600 text-white text-xs sm:text-sm shadow-sm'
+    : 'flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-bold bg-white border text-slate-700 text-xs sm:text-sm';
 }
 
-// 3. CONFIGURACIÓN PRECIO POR DEFECTO
+function abrirModalNuevoCliente() { document.getElementById('modal-nuevo-cliente').classList.remove('hidden'); }
+function cerrarModalNuevoCliente() { document.getElementById('modal-nuevo-cliente').classList.add('hidden'); }
+
+// 3. CONFIGURACIÓN
 async function cargarConfiguracion() {
   const { data } = await supabaseClient.from('configuracion').select('valor').eq('clave', 'precio_kilo_cerdo_defecto').single();
   if (data) {
@@ -97,30 +125,90 @@ document.getElementById('form-config-precio').addEventListener('submit', async (
   alert('Precio por defecto actualizado');
 });
 
-// 4. SELECTORES GENERALES
+// 4. SELECTORES Y ENLACE SACRIFICIO -> VENTAS
 async function cargarSelectores() {
-  const [{ data: lotes }, { data: clientes }, { data: cuentas }, { data: alimentos }] = await Promise.all([
+  const [{ data: lotes }, { data: dispLotes }, { data: sacrificios }, { data: clientes }, { data: cuentas }, { data: alimentos }] = await Promise.all([
     supabaseClient.from('lotes').select('id, codigo, nombre').eq('estado', 'ACTIVO'),
+    supabaseClient.from('disponibilidad_comercial_lotes').select('*').eq('estado', 'ACTIVO'),
+    supabaseClient.from('sacrificios_disponibles').select('*').order('fecha', { ascending: false }),
     supabaseClient.from('clientes').select('id, nombre, telefono').eq('activo', true).order('nombre'),
     supabaseClient.from('cuentas_bancarias').select('id, nombre, tipo').eq('activa', true),
     supabaseClient.from('catalogo_alimentos').select('id, nombre').eq('activo', true)
   ]);
 
+  disponibilidadLotesCache = dispLotes || [];
+  sacrificiosCache = sacrificios || [];
+
   const optLotes = '<option value="">Selecciona lote...</option>' + (lotes || []).map(l => `<option value="${l.id}">${l.codigo} - ${l.nombre}</option>`).join('');
-  ['select-lote-venta', 'select-lote-despacho'].forEach(id => document.getElementById(id).innerHTML = optLotes);
+  ['select-lote-venta', 'select-lote-despacho', 'select-lote-sacrificio'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = optLotes;
+  });
   document.getElementById('select-lote-gasto').innerHTML = '<option value="">General de la granja</option>' + (lotes || []).map(l => `<option value="${l.id}">${l.codigo} - ${l.nombre}</option>`).join('');
+
+  document.getElementById('select-sacrificio-venta').innerHTML =
+    '<option value="">Venta directa desde lote en pie (Sin sacrificio previo)</option>' +
+    sacrificiosCache.map(s => `<option value="${s.id}">[${s.fecha}] Lote ${s.lote_codigo} • ${s.modalidad_destino.replace('_', ' ')} (${s.cerdos_restantes} und / ${s.kilos_restantes} kg)</option>`).join('');
 
   document.getElementById('select-cliente-venta').innerHTML = '<option value="">Selecciona cliente...</option>' +
     (clientes || []).map(c => `<option value="${c.id}">${c.nombre} (${c.telefono || 'Sin tel'})</option>`).join('');
 
   const optCuentas = (cuentas || []).map(c => `<option value="${c.id}">${c.nombre} (${c.tipo})</option>`).join('');
   ['select-cuenta-venta', 'select-cuenta-gasto', 'select-cuenta-compra-alim', 'abono-cuenta-id'].forEach(id => {
-    document.getElementById(id).innerHTML = optCuentas;
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = optCuentas;
   });
   document.getElementById('filtro-cuenta-mov').innerHTML = '<option value="">Todas las cuentas</option>' + optCuentas;
 
   const optAlim = '<option value="">Selecciona alimento...</option>' + (alimentos || []).map(a => `<option value="${a.id}">${a.nombre}</option>`).join('');
   ['select-alimento-compra', 'select-alimento-despacho'].forEach(id => document.getElementById(id).innerHTML = optAlim);
+}
+
+function alSeleccionarSacrificio() {
+  const sacId = document.getElementById('select-sacrificio-venta').value;
+  const infoEl = document.getElementById('info-origen-sacrificio');
+  if (!sacId) { infoEl.classList.add('hidden'); return; }
+
+  const sac = sacrificiosCache.find(s => s.id === sacId);
+  if (!sac) return;
+
+  document.getElementById('select-lote-venta').value = sac.lote_id;
+  mostrarDisponibilidadLote();
+
+  const radio = document.querySelector(`input[name="modalidad_venta"][value="${sac.modalidad_destino}"]`);
+  if (radio) { radio.checked = true; cambiarModalidadVenta(); }
+
+  document.getElementById('venta-cantidad').value = sac.cerdos_restantes;
+  document.getElementById('venta-kilos').value = sac.kilos_restantes;
+  calcularTotalVenta();
+
+  infoEl.textContent = `Origen: Lote ${sac.lote_codigo} (${sac.lote_nombre}) • Disponible: ${sac.cerdos_restantes} und / ${sac.kilos_restantes} kg.`;
+  infoEl.classList.remove('hidden');
+}
+
+function mostrarDisponibilidadLote() {
+  const loteId = document.getElementById('select-lote-venta').value;
+  const badge = document.getElementById('badge-disponibilidad-lote');
+  const disp = disponibilidadLotesCache.find(d => d.lote_id === loteId);
+  badge.textContent = disp ? `Disp: ${disp.cerdos_en_pie_disponibles} en pie | ${disp.cerdos_canal_disponibles} canal (${disp.kilos_canal_disponibles} kg)` : '';
+}
+
+function cambiarModalidadVenta() {
+  const mod = document.querySelector('input[name="modalidad_venta"]:checked').value;
+  const lblKilos = document.getElementById('lbl-venta-kilos');
+  const lblPrecio = document.getElementById('lbl-venta-precio');
+  if (mod === 'POR_KILO') {
+    lblKilos.textContent = 'Kilos Totales';
+    lblPrecio.textContent = 'Precio x Kilo ($)';
+    document.getElementById('venta-precio-kilo').value = precioKiloDefecto;
+  } else if (mod === 'CERDO_ENTERO') {
+    lblKilos.textContent = 'Peso Canal (kg)';
+    lblPrecio.textContent = 'Precio x Kilo Canal ($)';
+  } else {
+    lblKilos.textContent = 'Kilos Despresados';
+    lblPrecio.textContent = 'Precio Prom. Kilo ($)';
+  }
+  calcularTotalVenta();
 }
 
 // 5. DASHBOARD
@@ -129,18 +217,18 @@ async function cargarDashboard() {
   if (kpi) {
     const tarjetas = [
       { t: 'Lotes Activos', v: kpi.lotes_activos },
-      { t: 'Cerdos Disponibles', v: kpi.cerdos_disponibles },
+      { t: 'Cerdos en Pie', v: kpi.cerdos_disponibles },
       { t: 'Ventas del Mes', v: moneda.format(kpi.ventas_mes) },
-      { t: 'Cartera por Cobrar', v: moneda.format(kpi.cartera_pendiente_total) },
-      { t: 'Inventario Alimento', v: moneda.format(kpi.valor_inventario_alimento) },
-      { t: 'Compras Alimento Mes', v: moneda.format(kpi.compras_alimento_mes) },
-      { t: 'Gastos y Medicamentos', v: moneda.format(Number(kpi.otros_gastos_mes) + Number(kpi.costos_sanitarios_mes)) },
-      { t: 'Mortalidad Acum.', v: `${kpi.mortalidad_acumulada_porcentaje}%` }
+      { t: 'Cartera Cobrar', v: moneda.format(kpi.cartera_pendiente_total) },
+      { t: 'Inv. Alimento', v: moneda.format(kpi.valor_inventario_alimento) },
+      { t: 'Alimento Mes', v: moneda.format(kpi.compras_alimento_mes) },
+      { t: 'Gastos / Med.', v: moneda.format(Number(kpi.otros_gastos_mes) + Number(kpi.costos_sanitarios_mes)) },
+      { t: 'Mortalidad', v: `${kpi.mortalidad_acumulada_porcentaje}%` }
     ];
     document.getElementById('kpi-grid').innerHTML = tarjetas.map(x => `
-      <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-emerald-600">
-        <p class="text-xs text-slate-500 uppercase">${x.t}</p>
-        <p class="text-xl font-bold mt-1">${x.v}</p>
+      <div class="bg-white p-3.5 sm:p-4 rounded-2xl shadow-sm border-l-4 border-emerald-600">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase truncate">${x.t}</p>
+        <p class="text-base sm:text-xl font-extrabold mt-1 text-slate-900 truncate">${x.v}</p>
       </div>
     `).join('');
   }
@@ -149,18 +237,19 @@ async function cargarDashboard() {
   if (lotes) {
     document.getElementById('tabla-rentabilidad-lotes').innerHTML = lotes.map(l => `
       <tr>
-        <td class="p-2 font-medium">${l.codigo} - ${l.nombre}</td>
-        <td class="p-2">${l.cantidad_disponible} / ${l.cantidad_inicial}</td>
-        <td class="p-2">${l.mortalidad_porcentaje}%</td>
-        <td class="p-2">${moneda.format(l.costo_acumulado)}</td>
-        <td class="p-2">${moneda.format(l.ventas_registradas)}</td>
-        <td class="p-2 font-bold ${l.resultado_bruto_estimado >= 0 ? 'text-emerald-600' : 'text-red-600'}">${moneda.format(l.resultado_bruto_estimado)}</td>
+        <td data-label="Lote" class="p-2.5 font-bold">${l.codigo} - ${l.nombre}</td>
+        <td data-label="En Pie Disp." class="p-2.5 font-semibold">${l.cantidad_disponible} / ${l.cantidad_inicial}</td>
+        <td data-label="Sacrificados" class="p-2.5">${l.cerdos_sacrificados}</td>
+        <td data-label="Mortalidad" class="p-2.5">${l.mortalidad_porcentaje}%</td>
+        <td data-label="Costo Acum." class="p-2.5">${moneda.format(l.costo_acumulado)}</td>
+        <td data-label="Ventas" class="p-2.5">${moneda.format(l.ventas_registradas)}</td>
+        <td data-label="Resultado" class="p-2.5 font-extrabold ${l.resultado_bruto_estimado >= 0 ? 'text-emerald-600' : 'text-red-600'}">${moneda.format(l.resultado_bruto_estimado)}</td>
       </tr>
     `).join('');
   }
 }
 
-// 6. VENTAS, RUTA DE COBRO Y TARJETA DE CLIENTE
+// 6. VENTAS, RUTA DE COBRO Y CLIENTES
 function calcularTotalVenta() {
   const kilos = Number(document.getElementById('venta-kilos').value || 0);
   const precio = Number(document.getElementById('venta-precio-kilo').value || 0);
@@ -175,17 +264,19 @@ function toggleCamposCredito() {
 document.getElementById('form-cliente').addEventListener('submit', async (e) => {
   e.preventDefault();
   const datos = Object.fromEntries(new FormData(e.target));
-  const { error } = await supabaseClient.from('clientes').insert([datos]);
+  const { data: nuevoCli, error } = await supabaseClient.from('clientes').insert([datos]).select().single();
   if (error) return alert(error.message);
-  alert('Cliente creado');
+
   e.target.reset();
-  cargarSelectores();
+  cerrarModalNuevoCliente();
+  await cargarSelectores();
+  if (nuevoCli) document.getElementById('select-cliente-venta').value = nuevoCli.id;
+  alert('Cliente registrado y seleccionado');
 });
 
 document.getElementById('form-venta').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const fd = new FormData(e.target);
-  const datos = Object.fromEntries(fd);
+  const datos = Object.fromEntries(new FormData(e.target));
   const totalVenta = Number(datos.kilos) * Number(datos.precio_kilo);
   const abonoInicial = datos.tipo_pago === 'CONTADO' ? totalVenta : Number(datos.abono_inicial || 0);
 
@@ -193,6 +284,8 @@ document.getElementById('form-venta').addEventListener('submit', async (e) => {
     fecha: datos.fecha,
     lote_id: datos.lote_id,
     cliente_id: datos.cliente_id,
+    sacrificio_id: datos.sacrificio_id || null,
+    modalidad_venta: datos.modalidad_venta,
     cantidad_cerdos: Number(datos.cantidad_cerdos),
     kilos: Number(datos.kilos),
     precio_kilo: Number(datos.precio_kilo),
@@ -207,7 +300,6 @@ document.getElementById('form-venta').addEventListener('submit', async (e) => {
   const { data: ventaCreada, error } = await supabaseClient.from('ventas').insert([payloadVenta]).select().single();
   if (error) return alert('Error al guardar venta: ' + error.message);
 
-  // Si hubo pago de contado o abono inicial, registrar en abonos y en movimiento bancario
   if (abonoInicial > 0 && datos.cuenta_id) {
     await supabaseClient.from('abonos').insert([{
       fecha: datos.fecha,
@@ -223,7 +315,7 @@ document.getElementById('form-venta').addEventListener('submit', async (e) => {
       cuenta_id: datos.cuenta_id,
       tipo: 'ENTRADA',
       categoria: 'VENTA',
-      concepto: `Ingreso venta cerdos (${datos.cantidad_cerdos} und - ${datos.kilos} kg)`,
+      concepto: `Venta ${datos.modalidad_venta.replace('_', ' ')} (${datos.cantidad_cerdos} und - ${datos.kilos} kg)`,
       valor: abonoInicial,
       referencia_id: ventaCreada.id
     }]);
@@ -232,6 +324,7 @@ document.getElementById('form-venta').addEventListener('submit', async (e) => {
   alert('Venta registrada exitosamente');
   e.target.reset();
   document.getElementById('venta-precio-kilo').value = precioKiloDefecto;
+  document.getElementById('info-origen-sacrificio').classList.add('hidden');
   cambiarSubTabVentas('ruta');
   cargarTodo();
 });
@@ -246,15 +339,15 @@ async function cargarVentasYRuta() {
 
   document.getElementById('tabla-ruta-cobro').innerHTML = deudores.map(v => `
     <tr>
-      <td class="p-2"><strong>${v.cliente || 'Cliente'}</strong><br><span class="text-xs text-slate-500">${v.cliente_telefono || ''}</span></td>
-      <td class="p-2 text-xs">${v.cliente_direccion || 'Sin dirección'}</td>
-      <td class="p-2">${v.fecha}</td>
-      <td class="p-2 font-semibold">${v.numero_cuotas} cuotas</td>
-      <td class="p-2 text-amber-700 font-medium">${v.fecha_proximo_cobro || 'Pendiente'}</td>
-      <td class="p-2">${moneda.format(v.total)}</td>
-      <td class="p-2 font-bold text-red-600">${moneda.format(v.saldo)}</td>
-      <td class="p-2">
-        <button onclick='abrirTarjetaCliente(${JSON.stringify(v)})' class="bg-amber-600 text-white px-2.5 py-1 rounded text-xs font-semibold hover:bg-amber-700">
+      <td data-label="Cliente" class="p-2.5"><div><strong>${v.cliente || 'Cliente'}</strong><br><span class="text-xs text-slate-500">${v.cliente_telefono || ''}</span></div></td>
+      <td data-label="Dirección" class="p-2.5 text-xs">${v.cliente_direccion || 'Sin dirección'}</td>
+      <td data-label="Fecha Venta" class="p-2.5">${v.fecha}</td>
+      <td data-label="Cuotas" class="p-2.5 font-semibold">${v.numero_cuotas} cuotas</td>
+      <td data-label="Próx. Cobro" class="p-2.5 text-amber-700 font-medium">${v.fecha_proximo_cobro || 'Pendiente'}</td>
+      <td data-label="Total Venta" class="p-2.5">${moneda.format(v.total)}</td>
+      <td data-label="Saldo" class="p-2.5 font-extrabold text-red-600">${moneda.format(v.saldo)}</td>
+      <td data-label="Gestión" class="p-2.5">
+        <button onclick='abrirTarjetaCliente(${JSON.stringify(v)})' class="w-full md:w-auto bg-amber-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-amber-700">
           Tarjeta / Cobrar
         </button>
       </td>
@@ -263,14 +356,14 @@ async function cargarVentasYRuta() {
 
   document.getElementById('tabla-ventas-historial').innerHTML = ventas.map(v => `
     <tr>
-      <td class="p-2">${v.fecha}</td>
-      <td class="p-2 font-medium">${v.cliente || 'General'}</td>
-      <td class="p-2">${v.lote_codigo}</td>
-      <td class="p-2">${v.cantidad_cerdos} cerdos (${v.kilos} kg)</td>
-      <td class="p-2 text-xs">${v.tipo_pago} (${v.numero_cuotas}c)</td>
-      <td class="p-2 font-semibold">${moneda.format(v.total)}</td>
-      <td class="p-2 ${v.saldo > 0 ? 'text-red-600 font-bold' : 'text-emerald-600'}">${moneda.format(v.saldo)}</td>
-      <td class="p-2"><button onclick='abrirTarjetaCliente(${JSON.stringify(v)})' class="text-blue-600 underline text-xs">Ver Tarjeta</button></td>
+      <td data-label="Fecha" class="p-2.5">${v.fecha}</td>
+      <td data-label="Cliente" class="p-2.5 font-semibold">${v.cliente || 'General'}</td>
+      <td data-label="Lote" class="p-2.5">${v.lote_codigo}</td>
+      <td data-label="Presentación" class="p-2.5"><span class="px-2 py-0.5 bg-slate-100 rounded text-xs">${(v.modalidad_venta || 'POR_KILO').replace('_', ' ')}</span></td>
+      <td data-label="Cant / Kilos" class="p-2.5">${v.cantidad_cerdos} und (${v.kilos} kg)</td>
+      <td data-label="Total" class="p-2.5 font-bold">${moneda.format(v.total)}</td>
+      <td data-label="Saldo" class="p-2.5 ${v.saldo > 0 ? 'text-red-600 font-bold' : 'text-emerald-600'}">${moneda.format(v.saldo)}</td>
+      <td data-label="Tarjeta" class="p-2.5"><button onclick='abrirTarjetaCliente(${JSON.stringify(v)})' class="text-blue-600 underline text-xs font-bold">Ver Tarjeta</button></td>
     </tr>
   `).join('');
 }
@@ -286,7 +379,7 @@ async function abrirTarjetaCliente(v) {
   document.getElementById('modal-cliente-detalle').innerHTML = `
     <p><strong>Fecha de Venta:</strong> ${v.fecha} | <strong>Lote:</strong> ${v.lote_codigo}</p>
     <p><strong>Modalidad:</strong> ${v.tipo_pago} pactado a <strong>${v.numero_cuotas} cuota(s)</strong></p>
-    <p><strong>Total Venta:</strong> ${moneda.format(v.total)} | <strong>Abonado:</strong> ${moneda.format(v.abonado)} | <strong class="text-red-600">Saldo: ${moneda.format(v.saldo)}</strong></p>
+    <p><strong>Total:</strong> ${moneda.format(v.total)} | <strong>Abonado:</strong> ${moneda.format(v.abonado)} | <strong class="text-red-600">Saldo: ${moneda.format(v.saldo)}</strong></p>
     <div class="mt-2 pt-2 border-t">
       <p class="font-semibold text-xs uppercase text-slate-500">Historial de Abonos:</p>
       <ul class="text-xs space-y-1 mt-1">${listaAbonos}</ul>
@@ -294,9 +387,7 @@ async function abrirTarjetaCliente(v) {
   `;
 }
 
-function cerrarModalCliente() {
-  document.getElementById('modal-cliente').classList.add('hidden');
-}
+function cerrarModalCliente() { document.getElementById('modal-cliente').classList.add('hidden'); }
 
 document.getElementById('form-abono-venta').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -319,13 +410,13 @@ document.getElementById('form-abono-venta').addEventListener('submit', async (e)
   cargarTodo();
 });
 
-// 7. BANCOS Y FLUJO DE MOVIMIENTOS
+// 7. BANCOS Y MOVIMIENTOS
 document.getElementById('form-cuenta').addEventListener('submit', async (e) => {
   e.preventDefault();
   const datos = Object.fromEntries(new FormData(e.target));
   const { error } = await supabaseClient.from('cuentas_bancarias').insert([datos]);
   if (error) return alert(error.message);
-  alert('Cuenta bancaria / caja creada');
+  alert('Cuenta creada');
   e.target.reset();
   cargarTodo();
 });
@@ -334,15 +425,15 @@ async function cargarCuentasBancarias() {
   const { data } = await supabaseClient.from('resumen_cuentas_bancarias').select('*');
   if (data) {
     document.getElementById('cards-cuentas-bancarias').innerHTML = data.map(c => `
-      <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-blue-600">
+      <div class="bg-white p-4 rounded-2xl shadow-sm border-t-4 border-blue-600">
         <div class="flex justify-between text-xs text-slate-500">
-          <span>${c.tipo}</span>
+          <span class="font-bold">${c.tipo}</span>
           <span>${c.numero_cuenta || ''}</span>
         </div>
-        <h4 class="font-bold text-lg mt-1">${c.nombre}</h4>
-        <p class="text-2xl font-bold text-blue-900 my-2">${moneda.format(c.saldo_actual)}</p>
+        <h4 class="font-bold text-base mt-1">${c.nombre}</h4>
+        <p class="text-2xl font-extrabold text-blue-900 my-2">${moneda.format(c.saldo_actual)}</p>
         <div class="text-xs flex justify-between text-slate-500 border-t pt-2">
-          <span>Inicial: ${moneda.format(c.saldo_inicial)}</span>
+          <span>Ini: ${moneda.format(c.saldo_inicial)}</span>
           <span class="text-emerald-600">+${moneda.format(c.total_entradas)}</span>
           <span class="text-red-600">-${moneda.format(c.total_salidas)}</span>
         </div>
@@ -370,21 +461,21 @@ async function cargarMovimientosCuenta() {
     else salidas += Number(m.valor);
     return `
       <tr>
-        <td class="p-2">${m.fecha}</td>
-        <td class="p-2 font-medium">${m.cuentas_bancarias?.nombre || ''}</td>
-        <td class="p-2"><span class="px-2 py-0.5 rounded text-xs ${m.tipo === 'ENTRADA' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}">${m.tipo}</span></td>
-        <td class="p-2">${m.concepto}</td>
-        <td class="p-2 font-bold ${m.tipo === 'ENTRADA' ? 'text-emerald-700' : 'text-red-700'}">${moneda.format(m.valor)}</td>
+        <td data-label="Fecha" class="p-2.5">${m.fecha}</td>
+        <td data-label="Cuenta" class="p-2.5 font-semibold">${m.cuentas_bancarias?.nombre || ''}</td>
+        <td data-label="Tipo" class="p-2.5"><span class="px-2 py-0.5 rounded text-xs font-bold ${m.tipo === 'ENTRADA' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}">${m.tipo}</span></td>
+        <td data-label="Concepto" class="p-2.5">${m.concepto}</td>
+        <td data-label="Valor" class="p-2.5 font-bold ${m.tipo === 'ENTRADA' ? 'text-emerald-700' : 'text-red-700'}">${moneda.format(m.valor)}</td>
       </tr>
     `;
-  }).join('') || '<tr><td colspan="5" class="p-4 text-center text-slate-400">Sin movimientos en este rango de fechas</td></tr>';
+  }).join('') || '<tr><td colspan="5" class="p-4 text-center text-slate-400">Sin movimientos en este rango</td></tr>';
 
   document.getElementById('mov-total-entradas').textContent = moneda.format(entradas);
   document.getElementById('mov-total-salidas').textContent = moneda.format(salidas);
   document.getElementById('mov-balance-periodo').textContent = moneda.format(entradas - salidas);
 }
 
-// 8. COMPRAS DE MEDICAMENTOS, ALIMENTOS Y LOTES
+// 8. COMPRAS, LOTES, SACRIFICIOS Y DESPACHOS
 document.getElementById('form-gasto-med').addEventListener('submit', async (e) => {
   e.preventDefault();
   const datos = Object.fromEntries(new FormData(e.target));
@@ -434,6 +525,16 @@ document.getElementById('form-lote').addEventListener('submit', async (e) => {
   cargarTodo();
 });
 
+document.getElementById('form-sacrificio').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const datos = Object.fromEntries(new FormData(e.target));
+  const { error } = await supabaseClient.from('sacrificios').insert([datos]);
+  if (error) return alert('Error al registrar sacrificio: ' + error.message);
+  alert('Salida a beneficio registrada y enviada a Ventas');
+  e.target.reset();
+  cargarTodo();
+});
+
 document.getElementById('form-despacho').addEventListener('submit', async (e) => {
   e.preventDefault();
   const datos = Object.fromEntries(new FormData(e.target));
@@ -454,7 +555,7 @@ document.getElementById('form-catalogo-alimento').addEventListener('submit', asy
   cargarSelectores();
 });
 
-// 9. REPORTES Y EXPORTACIÓN EXCEL
+// 9. REPORTES
 async function cargarVistaReporte() {
   const vista = document.getElementById('tipo-reporte').value;
   const titulo = document.getElementById('tipo-reporte').selectedOptions[0].text;

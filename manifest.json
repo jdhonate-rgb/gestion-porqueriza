@@ -1,0 +1,17 @@
+{
+  "name": "Porqueriza Control | DHSoftwareData",
+  "short_name": "Porqueriza",
+  "description": "Sistema integral de gestión porcina, lotes, sacrificios, ventas y cartera.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#064e3b",
+  "theme_color": "#064e3b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2395/2395796.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
