@@ -3,6 +3,7 @@ let precioKiloDefecto = 9500;
 let datosReporteActual = [];
 let sacrificiosCache = [];
 let disponibilidadLotesCache = [];
+let kpiActivo = null;
 
 // 1. AUTENTICACIÓN
 document.addEventListener('DOMContentLoaded', async () => {
@@ -58,7 +59,7 @@ async function cargarTodo() {
   ]);
 }
 
-// 2. NAVEGACIÓN ADAPTATIVA (PC SIDEBAR + MÓVIL BOTTOM BAR + DRAWER)
+// 2. NAVEGACIÓN ADAPTATIVA
 function toggleMenuMovil() {
   document.getElementById('drawer-movil').classList.toggle('hidden');
 }
@@ -67,7 +68,6 @@ function cambiarTab(tabId, cerrarDrawer = false) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   document.getElementById(`tab-${tabId}`).classList.remove('hidden');
 
-  // Actualizar estado activo en Sidebar PC y Drawer
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const activo = btn.dataset.tab === tabId;
     btn.classList.toggle('bg-emerald-700', activo);
@@ -75,7 +75,6 @@ function cambiarTab(tabId, cerrarDrawer = false) {
     btn.classList.toggle('text-emerald-100', !activo);
   });
 
-  // Actualizar estado activo en Barra Inferior Móvil
   document.querySelectorAll('.bottom-btn').forEach(btn => {
     const activo = btn.dataset.tab === tabId;
     btn.classList.toggle('text-emerald-700', activo);
@@ -211,26 +210,35 @@ function cambiarModalidadVenta() {
   calcularTotalVenta();
 }
 
-// 5. DASHBOARD
+// 5. DASHBOARD INTERACTIVO CON DESGLOSE AL TOCAR
 async function cargarDashboard() {
   const { data: kpi } = await supabaseClient.from('dashboard_gerencial').select('*').single();
   if (kpi) {
     const tarjetas = [
-      { t: 'Lotes Activos', v: kpi.lotes_activos },
-      { t: 'Cerdos en Pie', v: kpi.cerdos_disponibles },
-      { t: 'Ventas del Mes', v: moneda.format(kpi.ventas_mes) },
-      { t: 'Cartera Cobrar', v: moneda.format(kpi.cartera_pendiente_total) },
-      { t: 'Inv. Alimento', v: moneda.format(kpi.valor_inventario_alimento) },
-      { t: 'Alimento Mes', v: moneda.format(kpi.compras_alimento_mes) },
-      { t: 'Gastos / Med.', v: moneda.format(Number(kpi.otros_gastos_mes) + Number(kpi.costos_sanitarios_mes)) },
-      { t: 'Mortalidad', v: `${kpi.mortalidad_acumulada_porcentaje}%` }
+      { id: 'lotes_activos', t: 'Lotes Activos', v: kpi.lotes_activos, color: 'border-emerald-600' },
+      { id: 'cerdos_pie', t: 'Cerdos en Pie', v: kpi.cerdos_disponibles, color: 'border-emerald-600' },
+      { id: 'ventas_mes', t: 'Ventas del Mes', v: moneda.format(kpi.ventas_mes), color: 'border-blue-600' },
+      { id: 'cartera_cobrar', t: 'Cartera Cobrar', v: moneda.format(kpi.cartera_pendiente_total), color: 'border-amber-500' },
+      { id: 'inv_alimento', t: 'Inv. Alimento', v: moneda.format(kpi.valor_inventario_alimento), color: 'border-emerald-600' },
+      { id: 'alimento_mes', t: 'Alimento Mes', v: moneda.format(kpi.compras_alimento_mes), color: 'border-teal-600' },
+      { id: 'gastos_med', t: 'Gastos / Med.', v: moneda.format(Number(kpi.otros_gastos_mes) + Number(kpi.costos_sanitarios_mes)), color: 'border-purple-600' },
+      { id: 'mortalidad', t: 'Mortalidad', v: `${kpi.mortalidad_acumulada_porcentaje}%`, color: 'border-red-500' }
     ];
-    document.getElementById('kpi-grid').innerHTML = tarjetas.map(x => `
-      <div class="bg-white p-3.5 sm:p-4 rounded-2xl shadow-sm border-l-4 border-emerald-600">
-        <p class="text-[11px] font-semibold text-slate-500 uppercase truncate">${x.t}</p>
-        <p class="text-base sm:text-xl font-extrabold mt-1 text-slate-900 truncate">${x.v}</p>
-      </div>
-    `).join('');
+
+    document.getElementById('kpi-grid').innerHTML = tarjetas.map(x => {
+      const seleccionado = kpiActivo === x.id;
+      return `
+        <button type="button" onclick="verDetalleKpi('${x.id}', '${x.t}')"
+          class="kpi-card text-left w-full bg-white p-3.5 sm:p-4 rounded-2xl shadow-sm border-l-4 ${x.color} ${seleccionado ? 'ring-2 ring-emerald-600 bg-emerald-50/40' : 'hover:shadow-md hover:bg-slate-50/80'} active:scale-[0.98] transition cursor-pointer">
+          <div class="flex justify-between items-center gap-1">
+            <p class="text-[11px] font-semibold text-slate-500 uppercase truncate">${x.t}</p>
+            <span class="text-[10px] text-emerald-700 font-bold">${seleccionado ? '▲' : '▼'}</span>
+          </div>
+          <p class="text-base sm:text-xl font-extrabold mt-1 text-slate-900 truncate">${x.v}</p>
+          <span class="text-[10px] text-slate-400 block mt-1">Toca para ver detalle</span>
+        </button>
+      `;
+    }).join('');
   }
 
   const { data: lotes } = await supabaseClient.from('reporte_produccion_lotes').select('*');
@@ -247,6 +255,109 @@ async function cargarDashboard() {
       </tr>
     `).join('');
   }
+}
+
+function cerrarDetalleKpi() {
+  kpiActivo = null;
+  document.getElementById('panel-detalle-kpi').classList.add('hidden');
+  cargarDashboard();
+}
+
+async function verDetalleKpi(tipo, titulo) {
+  if (kpiActivo === tipo) {
+    cerrarDetalleKpi();
+    return;
+  }
+
+  kpiActivo = tipo;
+  await cargarDashboard();
+
+  const panel = document.getElementById('panel-detalle-kpi');
+  const tabla = document.getElementById('tabla-detalle-kpi');
+  document.getElementById('titulo-detalle-kpi').textContent = titulo;
+  panel.classList.remove('hidden');
+  tabla.innerHTML = '<tbody><tr><td class="p-4 text-center text-slate-400">Cargando desglose...</td></tr></tbody>';
+
+  const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  let headers = [];
+  let rows = [];
+
+  if (tipo === 'lotes_activos' || tipo === 'cerdos_pie') {
+    const { data } = await supabaseClient.from('resumen_lotes').select('*').eq('estado', 'ACTIVO');
+    headers = ['Código', 'Lote', 'Fecha Inicio', 'Iniciales', 'Sacrificados', 'Vendidos', 'Muertos', 'En Pie Disp.'];
+    rows = (data || []).map(r => [
+      r.codigo, r.nombre, r.fecha_inicio, r.cantidad_inicial,
+      r.cerdos_sacrificados, r.cerdos_vendidos, r.cerdos_muertos,
+      `<strong class="text-emerald-700">${r.cantidad_disponible}</strong>`
+    ]);
+  } else if (tipo === 'ventas_mes') {
+    const { data } = await supabaseClient.from('reporte_ventas_cartera').select('*').gte('fecha', inicioMes).order('fecha', { ascending: false });
+    headers = ['Fecha', 'Cliente', 'Lote', 'Modalidad', 'Cerdos / Kilos', 'Pago', 'Total'];
+    rows = (data || []).map(r => [
+      r.fecha, r.cliente || 'General', r.lote_codigo,
+      (r.modalidad_venta || 'POR_KILO').replace('_', ' '),
+      `${r.cantidad_cerdos} und (${r.kilos} kg)`, r.tipo_pago,
+      `<strong class="text-blue-700">${moneda.format(r.total)}</strong>`
+    ]);
+  } else if (tipo === 'cartera_cobrar') {
+    const { data } = await supabaseClient.from('reporte_ventas_cartera').select('*').gt('saldo', 0).order('fecha');
+    headers = ['Fecha Venta', 'Cliente', 'Teléfono', 'Cuotas', 'Total Venta', 'Abonado', 'Saldo Pendiente'];
+    rows = (data || []).map(r => [
+      r.fecha, r.cliente || 'General', r.cliente_telefono || '-',
+      `${r.numero_cuotas} cuotas`, moneda.format(r.total), moneda.format(r.abonado),
+      `<strong class="text-red-600">${moneda.format(r.saldo)}</strong>`
+    ]);
+  } else if (tipo === 'inv_alimento') {
+    const { data } = await supabaseClient.from('stock_alimento').select('*');
+    headers = ['Código', 'Alimento', 'Bultos en Stock', 'Costo Promedio', 'Valor Total'];
+    rows = (data || []).map(r => [
+      r.codigo, r.alimento, `<strong>${r.cantidad_stock}</strong>`,
+      moneda.format(r.costo_promedio_unidad),
+      `<strong class="text-emerald-700">${moneda.format(r.valor_stock)}</strong>`
+    ]);
+  } else if (tipo === 'alimento_mes') {
+    const { data } = await supabaseClient.from('compras_alimento').select('*, catalogo_alimentos(nombre)').gte('fecha', inicioMes).order('fecha', { ascending: false });
+    headers = ['Fecha', 'Alimento', 'Cantidad Bultos', 'Precio Unit.', 'Método Pago', 'Total Compra'];
+    rows = (data || []).map(r => [
+      r.fecha, r.catalogo_alimentos?.nombre || 'Alimento', r.cantidad,
+      moneda.format(r.precio_unidad), r.metodo_pago || 'EFECTIVO',
+      `<strong class="text-teal-700">${moneda.format(r.total)}</strong>`
+    ]);
+  } else if (tipo === 'gastos_med') {
+    const { data } = await supabaseClient.from('otros_gastos').select('*, lotes(codigo)').gte('fecha', inicioMes).order('fecha', { ascending: false });
+    headers = ['Fecha', 'Categoría', 'Lote', 'Concepto / Medicamento', 'Método Pago', 'Valor'];
+    rows = (data || []).map(r => [
+      r.fecha, r.categoria, r.lotes?.codigo || 'General', r.concepto,
+      r.metodo_pago || 'EFECTIVO',
+      `<strong class="text-purple-700">${moneda.format(r.valor)}</strong>`
+    ]);
+  } else if (tipo === 'mortalidad') {
+    const { data } = await supabaseClient.from('mortalidad').select('*, lotes(codigo, nombre)').order('fecha', { ascending: false });
+    headers = ['Fecha', 'Lote', 'Cantidad Bajas', 'Causa Reportada'];
+    rows = (data || []).map(r => [
+      r.fecha, `${r.lotes?.codigo || ''} - ${r.lotes?.nombre || ''}`,
+      `<strong class="text-red-600">${r.cantidad}</strong>`, r.causa
+    ]);
+  }
+
+  if (!rows.length) {
+    tabla.innerHTML = '<tbody><tr><td class="p-4 text-center text-slate-400">No hay registros detallados para este indicador aún.</td></tr></tbody>';
+  } else {
+    tabla.innerHTML = `
+      <thead class="bg-slate-50 border-b text-xs uppercase text-slate-600">
+        <tr>${headers.map(h => `<th class="p-2.5">${h}</th>`).join('')}</tr>
+      </thead>
+      <tbody class="md:divide-y">
+        ${rows.map(fila => `
+          <tr class="hover:bg-slate-50">
+            ${fila.map((celda, idx) => `<td data-label="${headers[idx]}" class="p-2.5">${celda}</td>`).join('')}
+          </tr>
+        `).join('')}
+      </tbody>
+    `;
+  }
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // 6. VENTAS, RUTA DE COBRO Y CLIENTES

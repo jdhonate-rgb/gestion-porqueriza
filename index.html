@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23064e3b'/%3E%3Ccircle cx='32' cy='34' r='18' fill='%23f9a8d4'/%3E%3Cpath d='M16 20c-3-4 2-9 7-5l3 3-6 6-4-4zm32 0c3-4-2-9-7-5l-3 3 6 6 4-4z' fill='%23f472b6'/%3E%3Cellipse cx='32' cy='38' rx='8.5' ry='6' fill='%23f472b6'/%3E%3Ccircle cx='29' cy='38' r='1.6' fill='%23831843'/%3E%3Ccircle cx='35' cy='38' r='1.6' fill='%23831843'/%3E%3Ccircle cx='25' cy='29' r='2' fill='%231e293b'/%3E%3Ccircle cx='39' cy='29' r='2' fill='%231e293b'/%3E%3C/svg%3E" />
   <title>Porqueriza Control | DHSoftwareData</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -56,13 +57,19 @@
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans antialiased selection:bg-emerald-200">
 
-  <!-- PANTALLA DE LOGIN RESPONSIVA -->
+  <!-- PANTALLA DE LOGIN RESPONSIVA CON ÍCONO DE CERDO -->
   <div id="login-screen" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-900">
     <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-md border-t-4 border-amber-500">
       <div class="text-center mb-6">
-        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-800 mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-900 shadow-md mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" class="w-12 h-12">
+            <circle cx="32" cy="34" r="18" fill="#f9a8d4"/>
+            <path d="M16 20c-3-4 2-9 7-5l3 3-6 6-4-4zm32 0c3-4-2-9-7-5l-3 3 6 6 4-4z" fill="#f472b6"/>
+            <ellipse cx="32" cy="38" rx="8.5" ry="6" fill="#f472b6"/>
+            <circle cx="29" cy="38" r="1.6" fill="#831843"/>
+            <circle cx="35" cy="38" r="1.6" fill="#831843"/>
+            <circle cx="25" cy="29" r="2" fill="#1e293b"/>
+            <circle cx="39" cy="29" r="2" fill="#1e293b"/>
           </svg>
         </div>
         <h1 class="text-2xl font-extrabold text-slate-900">Porqueriza Control</h1>
@@ -85,14 +92,27 @@
     </div>
   </div>
 
-  <!-- ESTRUCTURA PRINCIPAL ADAPTATIVA (SIDEBAR EN PC + TOPBAR/BOTTOMBAR EN MÓVIL Y TABLET) -->
+  <!-- ESTRUCTURA PRINCIPAL ADAPTATIVA -->
   <div id="app-screen" class="hidden min-h-screen flex flex-col lg:flex-row">
 
-    <!-- SIDEBAR PARA PC Y PORTÁTILES (lg:flex) -->
+    <!-- SIDEBAR PARA PC Y PORTÁTILES -->
     <aside class="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-emerald-950 text-white shadow-xl z-30">
-      <div class="p-5 border-b border-emerald-900">
-        <span class="font-extrabold text-xl tracking-tight text-white block">Porqueriza Control</span>
-        <span class="text-xs text-amber-400 font-medium">DHSoftwareData</span>
+      <div class="p-5 border-b border-emerald-900 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-900 flex items-center justify-center shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" class="w-8 h-8">
+            <circle cx="32" cy="34" r="18" fill="#f9a8d4"/>
+            <path d="M16 20c-3-4 2-9 7-5l3 3-6 6-4-4zm32 0c3-4-2-9-7-5l-3 3 6 6 4-4z" fill="#f472b6"/>
+            <ellipse cx="32" cy="38" rx="8.5" ry="6" fill="#f472b6"/>
+            <circle cx="29" cy="38" r="1.6" fill="#831843"/>
+            <circle cx="35" cy="38" r="1.6" fill="#831843"/>
+            <circle cx="25" cy="29" r="2" fill="#1e293b"/>
+            <circle cx="39" cy="29" r="2" fill="#1e293b"/>
+          </svg>
+        </div>
+        <div>
+          <span class="font-extrabold text-base tracking-tight text-white block leading-tight">Porqueriza Control</span>
+          <span class="text-[11px] text-amber-400 font-semibold">DHSoftwareData</span>
+        </div>
       </div>
 
       <div class="px-4 py-3 bg-emerald-900/50 border-b border-emerald-900">
@@ -130,11 +150,24 @@
       </div>
     </aside>
 
-    <!-- HEADER SUPERIOR PARA CELULARES Y TABLETS (<1024px) -->
+    <!-- HEADER SUPERIOR PARA CELULARES Y TABLETS -->
     <header class="lg:hidden sticky top-0 z-30 bg-emerald-950 text-white px-4 py-3 shadow-md flex justify-between items-center">
-      <div>
-        <span class="font-extrabold text-base">Porqueriza Control</span>
-        <span id="user-badge-mobile" class="block text-[11px] text-emerald-300"></span>
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-emerald-900 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" class="w-6 h-6">
+            <circle cx="32" cy="34" r="18" fill="#f9a8d4"/>
+            <path d="M16 20c-3-4 2-9 7-5l3 3-6 6-4-4zm32 0c3-4-2-9-7-5l-3 3 6 6 4-4z" fill="#f472b6"/>
+            <ellipse cx="32" cy="38" rx="8.5" ry="6" fill="#f472b6"/>
+            <circle cx="29" cy="38" r="1.6" fill="#831843"/>
+            <circle cx="35" cy="38" r="1.6" fill="#831843"/>
+            <circle cx="25" cy="29" r="2" fill="#1e293b"/>
+            <circle cx="39" cy="29" r="2" fill="#1e293b"/>
+          </svg>
+        </div>
+        <div>
+          <span class="font-extrabold text-sm block leading-tight">Porqueriza Control</span>
+          <span id="user-badge-mobile" class="block text-[11px] text-emerald-300"></span>
+        </div>
       </div>
       <div class="flex items-center gap-2">
         <button onclick="cargarTodo()" title="Sincronizar" class="p-2 bg-emerald-900 rounded-lg text-xs">🔄</button>
@@ -167,23 +200,40 @@
       </div>
     </div>
 
-    <!-- CONTENIDO PRINCIPAL (SE AJUSTA AUTOMÁTICAMENTE A CELULAR, TABLET Y PC) -->
+    <!-- CONTENIDO PRINCIPAL -->
     <main class="flex-1 lg:pl-64 pb-24 lg:pb-8">
       <div class="p-3 sm:p-5 lg:p-8 max-w-7xl mx-auto">
 
-        <!-- 1. DASHBOARD -->
+        <!-- 1. DASHBOARD INTERACTIVO -->
         <section id="tab-dashboard" class="tab-content space-y-5">
           <div class="flex justify-between items-center">
             <div>
               <h2 class="text-lg sm:text-2xl font-extrabold text-slate-900">Resumen de la Granja</h2>
-              <p class="text-xs text-slate-500">Indicadores operativos y financieros en tiempo real</p>
+              <p class="text-xs text-slate-500">Toca cualquier indicador para desglosar su detalle en la parte inferior</p>
             </div>
             <button onclick="cargarTodo()" class="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold bg-white border px-3.5 py-2 rounded-xl hover:bg-slate-50 shadow-sm">
               🔄 Actualizar
             </button>
           </div>
 
+          <!-- Tarjetas KPI clicables -->
           <div id="kpi-grid" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4"></div>
+
+          <!-- Panel Dinámico de Desglose al tocar un KPI -->
+          <div id="panel-detalle-kpi" class="hidden bg-white p-4 sm:p-5 rounded-2xl shadow-md border-2 border-emerald-600 transition-all">
+            <div class="flex justify-between items-center border-b border-slate-200 pb-3 mb-3">
+              <div>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Desglose Detallado</span>
+                <h3 id="titulo-detalle-kpi" class="text-base sm:text-lg font-extrabold text-slate-900"></h3>
+              </div>
+              <button onclick="cerrarDetalleKpi()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold">
+                ✕ Cerrar detalle
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table id="tabla-detalle-kpi" class="w-full text-sm text-left mobile-cards"></table>
+            </div>
+          </div>
 
           <div class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/70">
             <h3 class="font-bold text-base mb-3 text-slate-800">Rentabilidad por Lote</h3>
@@ -274,7 +324,7 @@
             </div>
           </div>
 
-          <!-- SUBTAB B: ENTREGAS (FORMULARIO CENTRADO ADAPTABLE) -->
+          <!-- SUBTAB B: ENTREGAS -->
           <div id="subtab-entregas" class="hidden flex justify-center">
             <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-sm w-full max-w-2xl border-t-4 border-emerald-600">
               <h3 class="font-bold text-lg mb-4 text-emerald-800">Registrar Entrega / Venta</h3>
@@ -626,7 +676,7 @@
       </div>
     </main>
 
-    <!-- BARRA DE NAVEGACIÓN INFERIOR FIJA PARA CELULARES Y TABLETS (<1024px) -->
+    <!-- BARRA INFERIOR FIJA PARA CELULARES Y TABLETS -->
     <nav class="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 grid grid-cols-4 py-1.5 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]">
       <button onclick="cambiarTab('dashboard')" class="bottom-btn flex flex-col items-center justify-center py-1 text-emerald-700 font-bold" data-tab="dashboard">
         <span class="text-lg">📊</span>

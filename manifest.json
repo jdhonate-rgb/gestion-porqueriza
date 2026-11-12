@@ -9,9 +9,10 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2395/2395796.png",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='110' fill='%23064e3b'/%3E%3Ccircle cx='256' cy='272' r='145' fill='%23f9a8d4'/%3E%3Cpath d='M130 165c-25-35 15-75 55-45l25 25-45 45-35-25zm252 0c25-35-15-75-55-45l-25 25 45 45 35-25z' fill='%23f472b6'/%3E%3Cellipse cx='256' cy='305' rx='68' ry='48' fill='%23f472b6'/%3E%3Ccircle cx='232' cy='305' r='12' fill='%23831843'/%3E%3Ccircle cx='280' cy='305' r='12' fill='%23831843'/%3E%3Ccircle cx='200' cy='235' r='14' fill='%231e293b'/%3E%3Ccircle cx='312' cy='235' r='14' fill='%231e293b'/%3E%3C/svg%3E",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }
