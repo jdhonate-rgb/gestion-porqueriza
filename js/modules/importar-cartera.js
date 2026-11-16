@@ -11,15 +11,16 @@ const SINONIMOS = {
   zona: ['zona', 'barrio', 'sector', 'vereda', 'ruta', 'municipio'],
   saldo: ['saldo', 'valor', 'deuda', 'debe', 'pendiente', 'saldo pendiente', 'monto', 'cartera', 'total'],
   fecha: ['fecha', 'fecha de venta', 'fecha venta', 'desde', 'fecha de la deuda'],
+  fecha_cobro: ['fecha de cobro', 'fecha cobro', 'fecha pactada', 'pactada', 'vence', 'vencimiento', 'fecha limite', 'fecha de pago', 'cobrar el'],
   lote: ['lote', 'lote de origen', 'n lote', 'no lote', 'numero de lote'],
   observacion: ['observacion', 'observaciones', 'nota', 'notas', 'detalle', 'comentario'],
   documento: ['documento', 'cedula', 'cc', 'nit', 'identificacion'],
 };
 const ETIQUETA = {
   nombre: 'Nombre', telefono: 'Teléfono', direccion: 'Dirección', zona: 'Zona', saldo: 'Saldo',
-  fecha: 'Fecha', lote: 'Lote', observacion: 'Observación', documento: 'Documento',
+  fecha: 'Fecha', fecha_cobro: 'Fecha de cobro', lote: 'Lote', observacion: 'Observación', documento: 'Documento',
 };
-const ORDEN_COLS = ['nombre', 'telefono', 'direccion', 'zona', 'saldo', 'fecha', 'lote', 'observacion', 'documento'];
+const ORDEN_COLS = ['nombre', 'telefono', 'direccion', 'zona', 'saldo', 'fecha', 'fecha_cobro', 'lote', 'observacion', 'documento'];
 
 const sinTildes = (t) => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -123,6 +124,7 @@ function aFilas(tabla) {
       documento: val(f, 'documento'),
       saldo: saldo === null ? val(f, 'saldo') : String(saldo),
       fecha: leerFecha(val(f, 'fecha')),
+      fecha_cobro: leerFecha(val(f, 'fecha_cobro')),
       lote: val(f, 'lote').replace(/^lote\s*/i, ''),
       observacion: val(f, 'observacion'),
     };
@@ -133,9 +135,9 @@ function aFilas(tabla) {
 /* ---------- Plantilla ---------- */
 function descargarPlantilla() {
   const lineas = [
-    'Nombre;Teléfono;Dirección;Zona;Saldo;Fecha;Lote;Observación',
-    'Juan Pérez;3001234567;Calle 5 # 10-20;Barrio Centro;1500000;2026-09-15;2;Cerdos del lote 2',
-    'María López;3109876543;Vereda El Prado;El Prado;850000;2026-10-02;3;',
+    'Nombre;Teléfono;Dirección;Zona;Saldo;Fecha;Fecha de cobro;Lote;Observación',
+    'Juan Pérez;3001234567;Calle 5 # 10-20;Barrio Centro;1500000;2026-09-15;2026-10-15;2;Cerdos del lote 2',
+    'María López;3109876543;Vereda El Prado;El Prado;850000;2026-10-02;2026-11-20;3;',
   ];
   const blob = new Blob(['﻿' + lineas.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
@@ -168,7 +170,7 @@ export async function render({ root }) {
         <li><strong>Revisa y confirma.</strong> Te mostramos qué se carga, qué ya estaba y qué hay que corregir.</li>
       </ol>
       <p><button type="button" class="btn btn-suave" id="btn-plantilla">Descargar plantilla de ejemplo</button></p>
-      <p class="ayuda">Columnas: <strong>Nombre</strong> y <strong>Saldo</strong> son obligatorias. Opcionales: Teléfono, Dirección, Zona, Fecha, Lote, Observación y Documento. Si no pones fecha, la deuda queda con la fecha de hoy.</p>
+      <p class="ayuda">Columnas: <strong>Nombre</strong> y <strong>Saldo</strong> son obligatorias. Opcionales: Teléfono, Dirección, Zona, Fecha de la deuda, <strong>Fecha de cobro</strong> (cuándo acordaron el pago), Lote, Observación y Documento. Si no pones fecha de la deuda, queda la de hoy; si no pones fecha de cobro, el cliente aparece en la ruta de hoy como “Sin fecha de cobro”.</p>
     </section>
 
     <form id="f-carga" novalidate class="carga">

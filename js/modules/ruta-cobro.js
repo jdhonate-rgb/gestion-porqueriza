@@ -1,6 +1,7 @@
-/* Ruta de cobro: tarjeta por cliente, cobros, visitas, ruta del día y cartera */
+/* Ruta de cobro automática: cada día sale sola la lista de quién debe pagar (atrasados, los de hoy
+   y los que no tienen fecha). Tarjeta por cliente, cobros, visitas, promesas y deudas nuevas. */
 import {
-  db, q, money, num, fdate, today, haceTxt, esc, errMsg, toast, modal, errorHtml, loading,
+  db, q, money, num, fdate, today, addDays, haceTxt, esc, errMsg, toast, modal, errorHtml, loading,
   bindMoney, readMoney, setMoney, withBusy, showError, getLotes, telLink, waLink, mapsLink,
 } from '../lib.js';
 
@@ -17,35 +18,55 @@ const radiosMetodo = `
     </div>
   </fieldset>`;
 
-/** Estado que se muestra en la tarjeta (una sola etiqueta, la más importante) */
+/** Botones para elegir rápido la fecha de cobro (hoy, en 8, 15 o 30 días) */
+const atajosFecha = (idCampo) => `<div class="atajos" data-atajos="${idCampo}" role="group" aria-label="Fechas rápidas">
+  ${[['Hoy', 0], ['En 8 días', 8], ['En 15 días', 15], ['En 30 días', 30]]
+    .map(([t, d]) => `<button type="button" class="btn btn-suave btn-chico" data-dias="${d}">${t}</button>`).join('')}</div>`;
+function enlazarAtajos(el) {
+  el.querySelectorAll('[data-atajos]').forEach((g) => g.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-dias]');
+    if (!b) return;
+    const campo = el.querySelector(`#${g.dataset.atajos}`);
+    campo.value = addDays(today(), Number(b.dataset.dias));
+    campo.dispatchEvent(new Event('input', { bubbles: true }));
+  }));
+}
+
+const estaPendiente = (r) => Number(r.saldo_total) > 0 && ['atrasado', 'hoy', 'sin_fecha'].includes(r.estado_cobro);
+const huboActividad = (r) => Number(r.visitas_hoy) > 0 || Number(r.cobrado_hoy) > 0;
+
+/** Etiqueta única y más importante de la tarjeta */
 function estadoCliente(r) {
   const hoy = today();
   if (Number(r.cobrado_hoy) > 0) return { txt: `Cobró hoy ${money(r.cobrado_hoy)}`, cls: 'chip-verde' };
-  if (r.promesa_fecha && r.promesa_fecha < hoy) return { txt: `Promesa vencida (${fdate(r.promesa_fecha)})`, cls: 'chip-rojo' };
-  if (r.promesa_fecha) return { txt: r.promesa_fecha === hoy ? 'Prometió pagar hoy' : `Promete pagar el ${fdate(r.promesa_fecha)}`, cls: 'chip-ocre' };
-  if (r.visitas_hoy > 0 && r.ultima_visita_resultado === 'no_estaba') return { txt: 'No estaba hoy', cls: 'chip-ocre' };
-  if (Number(r.dias_deuda) > 30) return { txt: `${r.dias_deuda} días de deuda`, cls: 'chip-rojo' };
-  if (Number(r.saldo_total) > 0) return { txt: 'Con saldo', cls: 'chip-ocre' };
-  return { txt: 'Al día', cls: 'chip-verde' };
+  if (Number(r.saldo_total) <= 0) return { txt: 'Al día', cls: 'chip-verde' };
+  if (Number(r.visitas_hoy) > 0 && r.ultima_visita_resultado === 'no_estaba') return { txt: 'No estaba hoy', cls: 'chip-ocre' };
+  if (r.promesa_fecha && r.estado_cobro === 'proximo') return { txt: `Prometió pagar el ${fdate(r.promesa_fecha)}`, cls: 'chip-ocre' };
+  if (r.estado_cobro === 'atrasado') {
+    const n = Number(r.dias_atraso);
+    return { txt: `Atrasado ${n} ${n === 1 ? 'día' : 'días'}`, cls: 'chip-rojo' };
+  }
+  if (r.estado_cobro === 'hoy') return { txt: r.promesa_fecha === hoy ? 'Prometió pagar hoy' : 'Toca cobrar hoy', cls: 'chip-ocre' };
+  if (r.estado_cobro === 'sin_fecha') return { txt: 'Sin fecha de cobro', cls: 'chip-ocre' };
+  return { txt: `Cobro el ${fdate(r.proxima_cobro)}`, cls: 'chip-verde' };
 }
 
-/** Prioridad para ordenar: promesas vencidas primero, luego la deuda más vieja y el saldo mayor */
+/** Orden de la ruta: primero los más atrasados, luego los de hoy, los que no tienen fecha y los agregados a mano */
 function prioridad(r) {
-  const hoy = today();
-  const vencida = r.promesa_fecha && r.promesa_fecha < hoy ? 1e9 : 0;
-  return vencida + (Number(r.dias_deuda) || 0) * 1000 + Number(r.saldo_total) / 1e6;
+  const base = { atrasado: 1e6 + (Number(r.dias_atraso) || 0) * 1000, hoy: 5e5, sin_fecha: 3e5, proximo: r.en_ruta ? 1e5 : 0 }[r.estado_cobro] || 0;
+  return base + Math.min(Number(r.saldo_total) / 1e4, 999);
 }
 
 export async function render({ root }) {
   const lotes = await getLotes();
-  const st = { tab: 'ruta', rows: [], buscar: '', zona: '', estado: '', orden: 'prioridad' };
+  const st = { tab: 'hoy', rows: [], buscar: '', zona: '', orden: 'prioridad' };
   let carga = 0;
 
   root.innerHTML = `
     <header class="page-head">
       <div>
         <h1 tabindex="-1">Ruta de cobro</h1>
-        <p class="sub">Arma la ruta del día, cobra cliente por cliente y deja anotado qué pasó en cada visita.</p>
+        <p class="sub">Aquí sale solo a quién debes cobrarle hoy. Anota los clientes que te deben y la fecha acordada; el resto lo hace la ruta.</p>
       </div>
       <div class="acciones-cab">
         <a class="btn btn-suave" href="#/importar-cartera">Cargar cartera</a>
@@ -54,20 +75,29 @@ export async function render({ root }) {
     </header>
     <div id="resumen"></div>
     <div class="tabs" role="tablist" aria-label="Secciones">
-      <button type="button" role="tab" id="tab-ruta" aria-selected="true" aria-controls="panel">Ruta de hoy</button>
-      <button type="button" role="tab" id="tab-todos" aria-selected="false" aria-controls="panel">Todos los clientes con saldo</button>
+      <button type="button" role="tab" id="tab-hoy" aria-selected="true" aria-controls="panel">Para cobrar hoy</button>
+      <button type="button" role="tab" id="tab-proximos" aria-selected="false" aria-controls="panel">Próximos</button>
+      <button type="button" role="tab" id="tab-todos" aria-selected="false" aria-controls="panel">Todos con saldo</button>
     </div>
     <div id="panel" role="tabpanel"></div>`;
 
   const panel = root.querySelector('#panel');
   const resumen = root.querySelector('#resumen');
 
-  root.querySelectorAll('[role=tab]').forEach((t) => t.addEventListener('click', () => {
-    st.tab = t.id === 'tab-todos' ? 'todos' : 'ruta';
-    root.querySelectorAll('[role=tab]').forEach((x) => x.setAttribute('aria-selected', String(x === t)));
+  function irATab(tab) {
+    st.tab = tab;
+    root.querySelectorAll('[role=tab]').forEach((x) => x.setAttribute('aria-selected', String(x.id === `tab-${tab}`)));
     pintar();
-  }));
+  }
+  root.querySelectorAll('[role=tab]').forEach((t) => t.addEventListener('click', () => irATab(t.id.replace('tab-', ''))));
   root.querySelector('#btn-cliente').addEventListener('click', () => abrirNuevoCliente());
+
+  /* La lista se actualiza sola al volver a la app (por ejemplo, al día siguiente o desde otro dispositivo) */
+  const alVolver = () => {
+    if (!root.isConnected) { document.removeEventListener('visibilitychange', alVolver); return; }
+    if (document.visibilityState === 'visible' && !document.querySelector('.modal-fondo')) cargar(true);
+  };
+  document.addEventListener('visibilitychange', alVolver);
 
   /* ---------- Carga ---------- */
   async function cargar(silencioso = false) {
@@ -79,136 +109,132 @@ export async function render({ root }) {
       st.rows = filas;
       pintar();
     } catch (e) {
-      if (mi === carga) panel.innerHTML = errorHtml(e);
+      if (mi === carga && !silencioso) panel.innerHTML = errorHtml(e);
     }
   }
   panel.addEventListener('click', (e) => {
     if (e.target.closest('[data-reintentar]')) { cargar(); return; }
+    if (e.target.closest('[data-nuevo]')) { abrirNuevoCliente(); return; }
     manejarAccion(e);
   });
 
-  /* ---------- Pintar ---------- */
-  function pintarResumen() {
-    const hoy = today();
-    const conSaldo = st.rows.filter((r) => Number(r.saldo_total) > 0);
-    const cartera = conSaldo.reduce((a, r) => a + Number(r.saldo_total), 0);
-    const cobrado = st.rows.reduce((a, r) => a + Number(r.cobrado_hoy), 0);
-    const vencidas = conSaldo.filter((r) => r.promesa_fecha && r.promesa_fecha < hoy).length;
-    resumen.innerHTML = `<dl class="resumen">
-      <div><dt>Cartera por cobrar</dt><dd class="${cartera > 0 ? 'deuda' : ''}">${money(cartera)}</dd></div>
-      <div><dt>Clientes con saldo</dt><dd>${num(conSaldo.length)}</dd></div>
-      <div><dt>Cobrado hoy</dt><dd>${money(cobrado)}</dd></div>
-      <div><dt>Promesas vencidas</dt><dd>${num(vencidas)}</dd></div>
-    </dl>`;
-  }
-
-  function pintar() {
-    pintarResumen();
-    if (st.tab === 'ruta') pintarRuta(); else pintarTodos();
-  }
-
+  /* ---------- Listas ---------- */
+  const ordenar = (lista) => {
+    const f = {
+      prioridad: (a, b) => prioridad(b) - prioridad(a),
+      saldo: (a, b) => Number(b.saldo_total) - Number(a.saldo_total),
+      zona: (a, b) => (a.zona ?? 'zzz').localeCompare(b.zona ?? 'zzz', 'es') || prioridad(b) - prioridad(a),
+      nombre: (a, b) => a.nombre.localeCompare(b.nombre, 'es'),
+      fecha: (a, b) => String(a.proxima_cobro ?? '9999').localeCompare(String(b.proxima_cobro ?? '9999')),
+    }[st.orden];
+    return [...lista].sort(f);
+  };
   function filtrar(lista) {
-    const hoy = today();
     const b = st.buscar.trim().toLowerCase();
     return lista.filter((r) => {
       if (b && !`${r.nombre} ${r.direccion ?? ''} ${r.zona ?? ''} ${r.telefono ?? ''}`.toLowerCase().includes(b)) return false;
       if (st.zona && (r.zona ?? '') !== st.zona) return false;
-      if (st.estado === 'vencida' && !(r.promesa_fecha && r.promesa_fecha < hoy)) return false;
-      if (st.estado === 'promesa' && !r.promesa_fecha) return false;
-      if (st.estado === 'sin_visita' && Number(r.visitas_hoy) > 0) return false;
-      if (st.estado === 'mora' && !(Number(r.dias_deuda) > 30)) return false;
       return true;
     });
   }
+  const grupos = () => {
+    const conSaldo = st.rows.filter((r) => Number(r.saldo_total) > 0);
+    const pendientes = conSaldo.filter((r) => !huboActividad(r) && (estaPendiente(r) || r.en_ruta));
+    const hechos = st.rows.filter(huboActividad);
+    const proximos = conSaldo.filter((r) => r.estado_cobro === 'proximo' && !r.en_ruta);
+    return { conSaldo, pendientes, hechos, proximos };
+  };
 
-  function barraFiltros(conOrden) {
+  function pintarResumen() {
+    const { conSaldo, pendientes } = grupos();
+    const atrasados = conSaldo.filter((r) => r.estado_cobro === 'atrasado');
+    const cobrado = st.rows.reduce((a, r) => a + Number(r.cobrado_hoy), 0);
+    const visitados = st.rows.filter((r) => Number(r.visitas_hoy) > 0).length;
+    const porCobrar = pendientes.reduce((a, r) => a + Number(r.saldo_total), 0);
+    resumen.innerHTML = `<dl class="resumen">
+      <div><dt>Por cobrar hoy</dt><dd class="${porCobrar > 0 ? 'deuda' : ''}">${money(porCobrar)}</dd></div>
+      <div><dt>Clientes atrasados</dt><dd class="${atrasados.length ? 'deuda' : ''}">${num(atrasados.length)}</dd></div>
+      <div><dt>Cobrado hoy</dt><dd>${money(cobrado)}</dd></div>
+      <div><dt>Cartera total</dt><dd>${money(conSaldo.reduce((a, r) => a + Number(r.saldo_total), 0))}</dd></div>
+    </dl>`;
+    root.querySelector('#tab-hoy').textContent = `Para cobrar hoy (${pendientes.length})`;
+    root.querySelector('#tab-proximos').textContent = `Próximos (${grupos().proximos.length})`;
+  }
+
+  function barraFiltros() {
     const zonas = [...new Set(st.rows.map((r) => r.zona).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
     return `<div class="filtros">
       <div class="campo grande"><label for="f-buscar">Buscar cliente</label>
         <input id="f-buscar" type="search" value="${esc(st.buscar)}" placeholder="Nombre, barrio, dirección o teléfono" autocomplete="off"></div>
       <div class="campo"><label for="f-zona">Zona</label>
         <select id="f-zona"><option value="">Todas</option>${zonas.map((z) => `<option value="${esc(z)}"${z === st.zona ? ' selected' : ''}>${esc(z)}</option>`).join('')}</select></div>
-      <div class="campo"><label for="f-estado">Mostrar</label>
-        <select id="f-estado">
-          ${[['', 'Todos'], ['sin_visita', 'Sin visitar hoy'], ['vencida', 'Promesa vencida'], ['promesa', 'Con promesa de pago'], ['mora', 'Más de 30 días de deuda']]
-            .map(([v, t]) => `<option value="${v}"${v === st.estado ? ' selected' : ''}>${t}</option>`).join('')}
-        </select></div>
-      ${conOrden ? `<div class="campo"><label for="f-orden">Ordenar por</label>
+      <div class="campo"><label for="f-orden">Ordenar por</label>
         <select id="f-orden">
-          ${[['prioridad', 'Prioridad de cobro'], ['saldo', 'Mayor saldo'], ['antiguedad', 'Deuda más antigua'], ['nombre', 'Nombre'], ['zona', 'Zona']]
+          ${[['prioridad', 'Quién urge más'], ['zona', 'Zona'], ['saldo', 'Mayor saldo'], ['fecha', 'Fecha de cobro'], ['nombre', 'Nombre']]
             .map(([v, t]) => `<option value="${v}"${v === st.orden ? ' selected' : ''}>${t}</option>`).join('')}
-        </select></div>` : ''}
+        </select></div>
     </div>`;
   }
-
-  function enlazarFiltros(repintar) {
+  function enlazarFiltros() {
     const buscar = panel.querySelector('#f-buscar');
     buscar.addEventListener('input', () => {
       st.buscar = buscar.value;
       const pos = buscar.selectionStart;
-      repintar();
+      pintarListas();
       const nuevo = panel.querySelector('#f-buscar');
       nuevo.focus(); nuevo.setSelectionRange(pos, pos);
     });
-    panel.querySelector('#f-zona').addEventListener('change', (e) => { st.zona = e.target.value; repintar(); });
-    panel.querySelector('#f-estado').addEventListener('change', (e) => { st.estado = e.target.value; repintar(); });
-    panel.querySelector('#f-orden')?.addEventListener('change', (e) => { st.orden = e.target.value; repintar(); });
+    panel.querySelector('#f-zona').addEventListener('change', (e) => { st.zona = e.target.value; pintarListas(); });
+    panel.querySelector('#f-orden').addEventListener('change', (e) => { st.orden = e.target.value; pintarListas(); });
   }
 
-  function pintarRuta() {
-    const ruta = st.rows.filter((r) => r.en_ruta).sort((a, b) => a.orden_ruta - b.orden_ruta);
-    const lista = filtrar(ruta);
-    const porCobrar = ruta.reduce((a, r) => a + Number(r.saldo_total), 0);
-    const visitados = ruta.filter((r) => Number(r.visitas_hoy) > 0).length;
-    panel.innerHTML = `
-      <div class="barra-ruta">
-        <p><strong>${ruta.length}</strong> ${ruta.length === 1 ? 'cliente' : 'clientes'} en la ruta de hoy
-          ${ruta.length ? ` · visitados ${visitados} de ${ruta.length} · por cobrar ${money(porCobrar)}` : ''}</p>
-        <button type="button" class="btn btn-suave" data-armar>Agregar clientes a la ruta</button>
-      </div>
-      ${ruta.length ? barraFiltros(false) : ''}
-      <div id="tarjetas" class="tarjetas"></div>`;
-    const cont = panel.querySelector('#tarjetas');
-    if (!ruta.length) {
-      cont.outerHTML = `<div class="vacio"><h2>La ruta de hoy está vacía</h2>
-        <p>Elige a quién vas a visitar hoy. Puedes agregar clientes uno por uno o toda una zona de una vez, y después ordenarlos como vayas a recorrerlos.</p>
-        <button type="button" class="btn btn-primario" data-armar>Armar la ruta de hoy</button>
-        ${st.rows.length ? '' : '<p>Aún no hay clientes con saldo. <a href="#/importar-cartera">Carga la cartera que ya tienes</a> o crea un cliente nuevo.</p>'}</div>`;
+  function pintar() {
+    pintarResumen();
+    const { conSaldo } = grupos();
+    if (!st.rows.length || (!conSaldo.length && !grupos().hechos.length)) {
+      panel.innerHTML = `<div class="vacio"><h2>Todavía no hay clientes con deuda</h2>
+        <p>Crea un cliente, escribe cuánto te debe y la fecha en que acordaron el cobro. Cuando llegue esa fecha, aparece solo en la ruta de hoy; si ya pasó, sale como atrasado.</p>
+        <button type="button" class="btn btn-primario" data-nuevo>Nuevo cliente</button>
+        <p>¿Tienes una lista larga de deudores? <a href="#/importar-cartera">Cárgala desde Excel</a>.</p></div>`;
       return;
     }
-    enlazarFiltros(pintarRuta);
-    cont.innerHTML = lista.length
-      ? lista.map((r) => tarjeta(r, { ruta: true, primero: r.cliente_id === ruta[0].cliente_id, ultimo: r.cliente_id === ruta[ruta.length - 1].cliente_id })).join('')
-      : '<div class="vacio"><p>Ningún cliente de la ruta coincide con los filtros.</p></div>';
+    panel.innerHTML = `${barraFiltros()}<div id="tarjetas"></div>`;
+    enlazarFiltros();
+    pintarListas();
   }
 
-  function pintarTodos() {
-    const base = st.rows.filter((r) => Number(r.saldo_total) > 0);
-    let lista = filtrar(base);
-    const ord = {
-      prioridad: (a, b) => prioridad(b) - prioridad(a),
-      saldo: (a, b) => Number(b.saldo_total) - Number(a.saldo_total),
-      antiguedad: (a, b) => (Number(b.dias_deuda) || 0) - (Number(a.dias_deuda) || 0),
-      nombre: (a, b) => a.nombre.localeCompare(b.nombre, 'es'),
-      zona: (a, b) => (a.zona ?? 'zzz').localeCompare(b.zona ?? 'zzz', 'es') || a.nombre.localeCompare(b.nombre, 'es'),
-    }[st.orden];
-    lista = [...lista].sort(ord);
-    panel.innerHTML = `${base.length ? barraFiltros(true) : ''}<div id="tarjetas" class="tarjetas"></div>`;
+  function pintarListas() {
+    const g = grupos();
     const cont = panel.querySelector('#tarjetas');
-    if (!base.length) {
-      cont.outerHTML = `<div class="vacio"><h2>No hay clientes con saldo pendiente</h2>
-        <p>Si ya tienes cartera de lotes que salieron, cárgala desde un archivo de Excel o CSV. También puedes crear un cliente nuevo con su saldo.</p>
-        <a class="btn btn-primario" href="#/importar-cartera">Cargar cartera</a></div>`;
-      return;
+    const bloque = (titulo, lista, opc) => (lista.length
+      ? `${titulo ? `<h2 class="seccion">${titulo} <span class="num">${lista.length}</span></h2>` : ''}
+         <div class="tarjetas">${lista.map((r) => tarjeta(r, opc)).join('')}</div>` : '');
+    let html = '';
+    if (st.tab === 'hoy') {
+      const pend = ordenar(filtrar(g.pendientes));
+      const hechos = ordenar(filtrar(g.hechos));
+      html = bloque(pend.length && hechos.length ? 'Por cobrar' : '', pend, {}) + bloque(hechos.length ? 'Ya atendidos hoy' : '', hechos, {});
+      if (!pend.length && !hechos.length) {
+        const prox = ordenar(g.proximos).sort((a, b) => String(a.proxima_cobro).localeCompare(String(b.proxima_cobro)))[0];
+        html = `<div class="vacio"><h2>${g.pendientes.length || g.hechos.length ? 'Ningún cliente coincide con los filtros' : 'No tienes cobros pendientes para hoy'}</h2>
+          ${g.pendientes.length || g.hechos.length ? '' : `<p>${prox ? `El próximo cobro es el ${fdate(prox.proxima_cobro)} (${esc(prox.nombre)}).` : 'Cuando un cliente llegue a su fecha de cobro, aparece aquí solo.'}</p>`}</div>`;
+      } else if (!pend.length && !st.buscar && !st.zona) {
+        html = `<div class="vacio listo-hoy"><h2>Ruta del día completa</h2><p>Ya atendiste a todos los que tocaba cobrar hoy.</p></div>` + html;
+      }
+    } else if (st.tab === 'proximos') {
+      const lista = filtrar(g.proximos).sort((a, b) => String(a.proxima_cobro).localeCompare(String(b.proxima_cobro)));
+      html = lista.length ? bloque('', st.orden === 'prioridad' ? lista : ordenar(lista), {})
+        : '<div class="vacio"><p>No hay cobros próximos con esos filtros.</p></div>';
+    } else {
+      const lista = ordenar(filtrar(g.conSaldo));
+      html = lista.length ? `<p class="conteo">${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'}</p>${bloque('', lista, {})}`
+        : '<div class="vacio"><p>Ningún cliente coincide con los filtros.</p></div>';
     }
-    enlazarFiltros(pintarTodos);
-    cont.innerHTML = lista.length
-      ? `<p class="conteo">${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'}</p>` + lista.map((r) => tarjeta(r, { ruta: false })).join('')
-      : '<div class="vacio"><p>Ningún cliente coincide con los filtros.</p></div>';
+    cont.innerHTML = html;
   }
 
   /* ---------- Tarjeta de cliente ---------- */
-  function tarjeta(r, { ruta, primero, ultimo }) {
+  function tarjeta(r) {
     const est = estadoCliente(r);
     const saldo = Number(r.saldo_total);
     const tel = telLink(r.telefono);
@@ -218,7 +244,14 @@ export async function render({ root }) {
     const ult = r.ultima_visita_fecha
       ? `${esc(RESULTADO[r.ultima_visita_resultado] || '')}, ${haceTxt(r.ultima_visita_fecha)}${r.ultima_visita_nota ? ` · “${esc(r.ultima_visita_nota)}”` : ''}`
       : 'Sin visitas anotadas';
-    return `<article class="cliente${Number(r.visitas_hoy) > 0 ? ' visitado' : ''}" data-id="${esc(r.cliente_id)}" aria-label="${esc(r.nombre)}">
+    const cobro = saldo > 0
+      ? (r.proxima_cobro
+        ? `${r.promesa_fecha ? 'Prometió pagar el' : 'Acordado para el'} ${fdate(r.proxima_cobro)} (${haceTxt(r.proxima_cobro)})`
+        : 'Sin fecha acordada')
+      : '';
+    const manual = r.en_ruta && saldo > 0 && r.estado_cobro === 'proximo';
+    const puedeAgregar = !r.en_ruta && saldo > 0 && r.estado_cobro === 'proximo';
+    return `<article class="cliente${huboActividad(r) ? ' visitado' : ''}${r.estado_cobro === 'atrasado' && !huboActividad(r) ? ' atrasado' : ''}" data-id="${esc(r.cliente_id)}" aria-label="${esc(r.nombre)}">
       <header class="cl-cab">
         <div>
           <h3>${esc(r.nombre)}</h3>
@@ -228,7 +261,8 @@ export async function render({ root }) {
       </header>
       <p class="cl-estado"><span class="chip ${est.cls}">${esc(est.txt)}</span></p>
       <dl class="cl-datos">
-        ${dato('Deuda', saldo > 0 ? `${r.ventas_pendientes} ${Number(r.ventas_pendientes) === 1 ? 'venta' : 'ventas'}, la más antigua del ${fdate(r.deuda_mas_antigua)} (${haceTxt(r.deuda_mas_antigua)})` : '')}
+        ${dato('Cobro', cobro)}
+        ${dato('Deuda', saldo > 0 ? `${r.ventas_pendientes} ${Number(r.ventas_pendientes) === 1 ? 'venta' : 'ventas'}, la más antigua del ${fdate(r.deuda_mas_antigua)}` : '')}
         ${dato('Último pago', r.ultimo_pago_fecha ? `${money(r.ultimo_pago_monto)}, ${haceTxt(r.ultimo_pago_fecha)}` : 'Aún no ha pagado')}
         ${dato('Última visita', ult)}
         ${dato('Teléfono', r.telefono ? esc(r.telefono) : 'Sin teléfono')}
@@ -241,19 +275,12 @@ export async function render({ root }) {
         ${mapa ? `<a class="btn btn-suave" href="${esc(mapa)}" target="_blank" rel="noopener">Mapa</a>` : ''}
         <button type="button" class="btn btn-suave" data-act="detalle">Detalle</button>
       </div>
-      ${ruta ? `<div class="cl-ruta">
-        <span>Parada ${r.orden_ruta}</span>
-        <button type="button" class="btn-texto" data-act="subir" ${primero ? 'disabled' : ''} aria-label="Subir a ${esc(r.nombre)} en la ruta">Subir</button>
-        <button type="button" class="btn-texto" data-act="bajar" ${ultimo ? 'disabled' : ''} aria-label="Bajar a ${esc(r.nombre)} en la ruta">Bajar</button>
-        <button type="button" class="btn-texto" data-act="quitar" aria-label="Quitar a ${esc(r.nombre)} de la ruta">Quitar de la ruta</button>
-      </div>` : `<div class="cl-ruta">${r.en_ruta
-        ? '<span>Está en la ruta de hoy</span>'
-        : '<button type="button" class="btn-texto" data-act="agregar">Agregar a la ruta de hoy</button>'}</div>`}
+      ${manual ? '<div class="cl-ruta"><span>Agregado a la ruta de hoy</span><button type="button" class="btn-texto" data-act="quitar">Quitar</button></div>' : ''}
+      ${puedeAgregar ? '<div class="cl-ruta"><button type="button" class="btn-texto" data-act="agregar">Cobrarle hoy de todos modos</button></div>' : ''}
     </article>`;
   }
 
   async function manejarAccion(e) {
-    if (e.target.closest('[data-armar]')) { abrirArmarRuta(); return; }
     const btn = e.target.closest('[data-act]');
     if (!btn) return;
     const id = btn.closest('article')?.dataset.id;
@@ -266,16 +293,7 @@ export async function render({ root }) {
     else if (act === 'agregar') {
       await ejecutar(() => q(db.rpc('agregar_a_ruta', { p_fecha: today(), p_clientes: [id] })), 'Agregado a la ruta de hoy');
     } else if (act === 'quitar') {
-      await ejecutar(() => q(db.from('cobro_ruta_dia').delete().eq('fecha', today()).eq('cliente_id', id)), 'Quitado de la ruta');
-    } else if (act === 'subir' || act === 'bajar') {
-      const orden = st.rows.filter((x) => x.en_ruta).sort((a, b) => a.orden_ruta - b.orden_ruta).map((x) => x.cliente_id);
-      const i = orden.indexOf(id);
-      const j = act === 'subir' ? i - 1 : i + 1;
-      if (j < 0 || j >= orden.length) return;
-      [orden[i], orden[j]] = [orden[j], orden[i]];
-      await ejecutar(() => q(db.rpc('guardar_orden_ruta', { p_fecha: today(), p_clientes: orden })));
-      // mantener la tarjeta a la vista tras moverla
-      panel.querySelector(`article[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' });
+      await ejecutar(() => q(db.from('cobro_ruta_dia').delete().eq('fecha', today()).eq('cliente_id', id)), 'Quitado de la ruta de hoy');
     }
   }
 
@@ -302,7 +320,7 @@ export async function render({ root }) {
         <p class="total-linea" id="k-queda" hidden><span>Saldo que queda</span><strong id="k-queda-v"></strong></p>
         <div id="k-prom" hidden>
           <div class="campo"><label for="k-promesa">¿Para cuándo promete pagar el resto? (opcional)</label>
-            <input id="k-promesa" type="date" min="${today()}"></div>
+            <input id="k-promesa" type="date" min="${today()}">${atajosFecha('k-promesa')}</div>
         </div>
         <div class="campo"><label for="k-nota">Nota (opcional)</label><input id="k-nota" type="text" autocomplete="off"></div>
         <p class="ayuda">El cobro se aplica primero a la deuda más antigua del cliente.</p>
@@ -317,6 +335,7 @@ export async function render({ root }) {
     const $ = (id) => f.querySelector(id);
     const monto = $('#k-monto'); const err = $('#k-error');
     bindMoney(monto);
+    enlazarAtajos(f);
     const actualizar = () => {
       const v = readMoney(monto);
       $('#k-queda').hidden = v <= 0 || v > saldo;
@@ -366,7 +385,7 @@ export async function render({ root }) {
           </div>
         </fieldset>
         <div class="campo" id="v-prom"><label for="v-fecha-prom">¿Qué día promete pagar?</label>
-          <input id="v-fecha-prom" type="date" min="${today()}" required></div>
+          <input id="v-fecha-prom" type="date" min="${today()}" required>${atajosFecha('v-fecha-prom')}</div>
         <div class="campo"><label for="v-nota">Nota (opcional)</label>
           <textarea id="v-nota" rows="2" placeholder="Por ejemplo: dice que paga cuando venda los cerdos"></textarea></div>
         <p class="ayuda">Si recibiste plata, usa el botón Cobrar: ahí queda el pago y la visita.</p>
@@ -379,6 +398,7 @@ export async function render({ root }) {
     });
     const f = m.el.querySelector('#f-visita');
     const err = f.querySelector('#v-error');
+    enlazarAtajos(f);
     const res = () => f.querySelector('input[name=res]:checked').value;
     f.addEventListener('change', () => { f.querySelector('#v-prom').hidden = res() !== 'promesa'; });
     f.addEventListener('submit', async (e) => {
@@ -404,73 +424,17 @@ export async function render({ root }) {
     });
   }
 
-  /* ---------- Armar la ruta del día ---------- */
-  function abrirArmarRuta() {
-    const disponibles = st.rows.filter((r) => !r.en_ruta && Number(r.saldo_total) > 0)
-      .sort((a, b) => prioridad(b) - prioridad(a));
-    if (!disponibles.length) { toast('Todos los clientes con saldo ya están en la ruta.'); return; }
-    const zonas = [...new Set(disponibles.map((r) => r.zona).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
-    const sel = new Set();
-    const vf = { b: '', z: '' };
-    const m = modal({
-      title: 'Agregar clientes a la ruta de hoy',
-      wide: true,
-      html: `<div class="filtros">
-          <div class="campo grande"><label for="a-buscar">Buscar</label><input id="a-buscar" type="search" autocomplete="off" placeholder="Nombre, barrio o dirección"></div>
-          <div class="campo"><label for="a-zona">Zona</label>
-            <select id="a-zona"><option value="">Todas</option>${zonas.map((z) => `<option value="${esc(z)}">${esc(z)}</option>`).join('')}</select></div>
-        </div>
-        <div class="barra-ruta"><p id="a-cuenta"></p>
-          <div><button type="button" class="btn btn-suave btn-chico" id="a-todos">Marcar los que se ven</button>
-          <button type="button" class="btn btn-suave btn-chico" id="a-ninguno">Quitar marcas</button></div></div>
-        <ul class="elegir" id="a-lista"></ul>
-        <p class="error" id="a-error" role="alert" hidden></p>
-        <div class="acciones-form">
-          <button type="button" class="btn btn-suave" data-cerrar>Cancelar</button>
-          <button type="button" class="btn btn-primario" id="a-ok">Agregar a la ruta</button>
-        </div>`,
-    });
-    const $ = (id) => m.el.querySelector(id);
-    const visibles = () => disponibles.filter((r) =>
-      (!vf.z || r.zona === vf.z)
-      && (!vf.b || `${r.nombre} ${r.direccion ?? ''} ${r.zona ?? ''}`.toLowerCase().includes(vf.b)));
-    function pintarLista() {
-      const v = visibles();
-      $('#a-lista').innerHTML = v.length ? v.map((r) => `<li><label>
-          <input type="checkbox" value="${esc(r.cliente_id)}"${sel.has(r.cliente_id) ? ' checked' : ''}>
-          <span class="el-nombre">${esc(r.nombre)}<small>${[r.zona, r.direccion].filter(Boolean).map(esc).join(' · ') || 'Sin dirección'}</small></span>
-          <span class="el-saldo">${money(r.saldo_total)}</span></label></li>`).join('')
-        : '<li class="vacio-li">Ningún cliente coincide.</li>';
-      $('#a-cuenta').innerHTML = `<strong>${sel.size}</strong> ${sel.size === 1 ? 'marcado' : 'marcados'} de ${disponibles.length} disponibles`;
-      $('#a-ok').textContent = sel.size ? `Agregar ${sel.size} a la ruta` : 'Agregar a la ruta';
-    }
-    $('#a-buscar').addEventListener('input', (e) => { vf.b = e.target.value.trim().toLowerCase(); pintarLista(); });
-    $('#a-zona').addEventListener('change', (e) => { vf.z = e.target.value; pintarLista(); });
-    $('#a-lista').addEventListener('change', (e) => {
-      if (e.target.checked) sel.add(e.target.value); else sel.delete(e.target.value);
-      $('#a-cuenta').innerHTML = `<strong>${sel.size}</strong> ${sel.size === 1 ? 'marcado' : 'marcados'} de ${disponibles.length} disponibles`;
-      $('#a-ok').textContent = sel.size ? `Agregar ${sel.size} a la ruta` : 'Agregar a la ruta';
-    });
-    $('#a-todos').addEventListener('click', () => { visibles().forEach((r) => sel.add(r.cliente_id)); pintarLista(); });
-    $('#a-ninguno').addEventListener('click', () => { sel.clear(); pintarLista(); });
-    $('#a-ok').addEventListener('click', async () => {
-      if (!sel.size) return showError($('#a-error'), 'Marca al menos un cliente.');
-      await withBusy($('#a-ok'), async () => {
-        try {
-          // se agregan en el orden de prioridad que se ve en la lista
-          const ids = disponibles.filter((r) => sel.has(r.cliente_id)).map((r) => r.cliente_id);
-          const n = await q(db.rpc('agregar_a_ruta', { p_fecha: today(), p_clientes: ids }));
-          m.close();
-          toast(`${n} ${Number(n) === 1 ? 'cliente agregado' : 'clientes agregados'} a la ruta`);
-          st.tab = 'ruta';
-          root.querySelector('#tab-ruta').setAttribute('aria-selected', 'true');
-          root.querySelector('#tab-todos').setAttribute('aria-selected', 'false');
-          await cargar(true);
-        } catch (ex) { showError($('#a-error'), errMsg(ex)); }
-      });
-    });
-    pintarLista();
-  }
+  /* ---------- Campos de una deuda (cliente nuevo y deuda nueva) ---------- */
+  const camposDeuda = (p) => `
+    <div class="rejilla">
+      <div class="campo"><label for="${p}-cobro">¿Cuándo acordaron el cobro?</label>
+        <input id="${p}-cobro" type="date" min="${addDays(today(), -365)}"><span class="ayuda">Con esta fecha la ruta sabe cuándo salir a cobrar y quién está atrasado.</span>
+        ${atajosFecha(`${p}-cobro`)}</div>
+      <div class="campo"><label for="${p}-fecha">Fecha de la deuda</label>
+        <input id="${p}-fecha" type="date" value="${today()}" max="${today()}"></div>
+      <div class="campo"><label for="${p}-lote">Lote del que viene</label>
+        <select id="${p}-lote"><option value="">No sé / varios</option>${lotes.map((l) => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('')}</select></div>
+    </div>`;
 
   /* ---------- Cliente nuevo ---------- */
   function abrirNuevoCliente() {
@@ -483,15 +447,14 @@ export async function render({ root }) {
           <div class="campo"><label for="n-dir">Dirección</label><input id="n-dir" type="text" autocomplete="off"></div>
           <div class="campo"><label for="n-zona">Zona o barrio</label><input id="n-zona" type="text" autocomplete="off"></div>
         </div>
-        <div class="campo"><label for="n-notas">Notas</label><textarea id="n-notas" rows="2"></textarea></div>
-        <fieldset class="caja"><legend>¿Ya te debe de un lote que salió? (opcional)</legend>
-          <div class="rejilla">
-            <div class="campo"><label for="n-saldo">Saldo que debe</label><input id="n-saldo" type="text" inputmode="numeric" autocomplete="off" placeholder="$ 0"></div>
-            <div class="campo"><label for="n-fecha">¿Desde cuándo?</label><input id="n-fecha" type="date" value="${today()}" max="${today()}"></div>
-            <div class="campo"><label for="n-lote">Lote del que viene</label>
-              <select id="n-lote"><option value="">No sé / varios</option>${lotes.map((l) => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('')}</select></div>
-          </div>
+        <fieldset class="caja"><legend>¿Te debe plata?</legend>
+          <div class="campo"><label for="n-saldo">Cuánto debe</label>
+            <input id="n-saldo" type="text" inputmode="numeric" autocomplete="off" placeholder="$ 0">
+            <span class="ayuda">Déjalo vacío si no te debe nada.</span></div>
+          <div id="n-deuda" hidden>${camposDeuda('n')}
+            <div class="campo"><label for="n-obs">Detalle de la deuda (opcional)</label><input id="n-obs" type="text" autocomplete="off" placeholder="Ej.: 4 cerdos del lote 2"></div></div>
         </fieldset>
+        <div class="campo"><label for="n-notas">Notas (opcional)</label><textarea id="n-notas" rows="2"></textarea></div>
         <p class="error" id="n-error" role="alert" hidden></p>
         <div class="acciones-form">
           <button type="button" class="btn btn-suave" data-cerrar>Cancelar</button>
@@ -503,11 +466,16 @@ export async function render({ root }) {
     const $ = (id) => f.querySelector(id);
     const err = $('#n-error');
     bindMoney($('#n-saldo'));
+    enlazarAtajos(f);
+    $('#n-saldo').addEventListener('input', () => { $('#n-deuda').hidden = readMoney($('#n-saldo')) <= 0; });
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       err.hidden = true;
       if (!$('#n-nombre').value.trim()) return showError(err, 'Escribe el nombre del cliente.');
       const saldo = readMoney($('#n-saldo'));
+      const fcobro = $('#n-cobro').value;
+      if (saldo > 0 && !fcobro) return showError(err, 'Elige la fecha en que acordaron el cobro. Con ella la ruta sabe cuándo salir a cobrar.');
+      if (saldo > 0 && !$('#n-fecha').value) return showError(err, 'Elige la fecha de la deuda.');
       await withBusy(f.querySelector('[type=submit]'), async () => {
         try {
           await q(db.rpc('crear_cliente', {
@@ -519,10 +487,61 @@ export async function render({ root }) {
             p_saldo: saldo,
             p_fecha: saldo > 0 ? $('#n-fecha').value : null,
             p_lote: saldo > 0 && $('#n-lote').value ? Number($('#n-lote').value) : null,
+            p_observacion: saldo > 0 ? ($('#n-obs').value || null) : null,
+            p_fecha_cobro: saldo > 0 ? fcobro : null,
           }));
           m.close();
-          toast('Cliente guardado');
+          if (saldo <= 0) toast('Cliente guardado');
+          else if (fcobro <= today()) { toast(`Cliente guardado. Ya aparece en la ruta de hoy`); irATab('hoy'); }
+          else { toast(`Cliente guardado. Le cobras el ${fdate(fcobro)}`); }
           await cargar(true);
+        } catch (ex) { showError(err, errMsg(ex)); }
+      });
+    });
+  }
+
+  /* ---------- Deuda nueva para un cliente que ya existe ---------- */
+  function abrirDeuda(cli, alTerminar) {
+    const m = modal({
+      title: `Anotar deuda de ${cli.nombre}`,
+      html: `<form id="f-deuda" novalidate>
+        <div class="campo"><label for="d-saldo">Cuánto debe</label>
+          <input id="d-saldo" type="text" inputmode="numeric" autocomplete="off" placeholder="$ 0" required></div>
+        ${camposDeuda('d')}
+        <div class="campo"><label for="d-obs">Detalle (opcional)</label><input id="d-obs" type="text" autocomplete="off"></div>
+        <p class="error" id="d-error" role="alert" hidden></p>
+        <div class="acciones-form">
+          <button type="button" class="btn btn-suave" data-cerrar>Cancelar</button>
+          <button type="submit" class="btn btn-primario">Guardar deuda</button>
+        </div>
+      </form>`,
+    });
+    const f = m.el.querySelector('#f-deuda');
+    const $ = (id) => f.querySelector(id);
+    const err = $('#d-error');
+    bindMoney($('#d-saldo'));
+    enlazarAtajos(f);
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      const saldo = readMoney($('#d-saldo'));
+      if (saldo <= 0) return showError(err, 'Escribe cuánto debe.');
+      if (!$('#d-cobro').value) return showError(err, 'Elige la fecha en que acordaron el cobro.');
+      if (!$('#d-fecha').value) return showError(err, 'Elige la fecha de la deuda.');
+      await withBusy(f.querySelector('[type=submit]'), async () => {
+        try {
+          await q(db.rpc('agregar_deuda', {
+            p_cliente_id: cli.id,
+            p_saldo: saldo,
+            p_fecha_cobro: $('#d-cobro').value,
+            p_fecha: $('#d-fecha').value,
+            p_lote: $('#d-lote').value ? Number($('#d-lote').value) : null,
+            p_observacion: $('#d-obs').value || null,
+          }));
+          m.close();
+          toast('Deuda anotada');
+          await cargar(true);
+          alTerminar?.();
         } catch (ex) { showError(err, errMsg(ex)); }
       });
     });
@@ -553,6 +572,7 @@ export async function render({ root }) {
           ${tel ? `<a class="btn btn-suave" href="${tel}">Llamar</a>` : ''}
           ${wa ? `<a class="btn btn-suave" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
           ${mapa ? `<a class="btn btn-suave" href="${esc(mapa)}" target="_blank" rel="noopener">Mapa</a>` : ''}
+          <button type="button" class="btn btn-suave" data-d="deuda">Anotar deuda</button>
           <button type="button" class="btn btn-suave" data-d="editar">Editar datos</button>
         </div>
         <dl class="resumen">
@@ -570,13 +590,14 @@ export async function render({ root }) {
 
         <h3>Ventas y deudas</h3>
         ${ventas.length ? `<div class="tabla-wrap"><table class="tabla">
-          <thead><tr><th>Fecha</th><th>De dónde</th><th class="der">Total</th><th class="der">Pagado</th><th class="der">Saldo</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>De dónde</th><th>Cobrar el</th><th class="der">Total</th><th class="der">Pagado</th><th class="der">Saldo</th><th>Estado</th></tr></thead>
           <tbody>${ventas.map((v) => {
             const e = ESTV[v.estado] || [esc(v.estado), 'chip-ocre'];
             const origen = v.origen === 'migracion' ? `Cartera anterior${v.lotes ? ` (${esc(v.lotes)})` : ''}` : (v.lotes ? esc(v.lotes) : 'Venta');
             return `<tr>
               <td data-label="Fecha">${fdate(v.fecha)}</td>
               <td data-label="De dónde" class="ancho">${origen}${v.observacion && v.observacion !== 'Cartera migrada' ? `<span class="obs">${esc(v.observacion)}</span>` : ''}</td>
+              <td data-label="Cobrar el">${Number(v.saldo) > 0 ? (v.fecha_cobro ? fdate(v.fecha_cobro) : 'Sin fecha') : ''}</td>
               <td data-label="Total" class="der">${money(v.total)}</td>
               <td data-label="Pagado" class="der">${money(v.pagado)}</td>
               <td data-label="Saldo" class="der ${Number(v.saldo) > 0 ? 'deuda' : ''}">${money(v.saldo)}</td>
@@ -607,6 +628,7 @@ export async function render({ root }) {
       m.el.querySelector('[data-d=visita]').addEventListener('click', () => {
         abrirVisita({ ...r, cliente_id: id, nombre: cli.nombre }, { alTerminar: () => pintarDetalle().catch(() => {}) });
       });
+      m.el.querySelector('[data-d=deuda]').addEventListener('click', () => abrirDeuda({ id, nombre: cli.nombre }, () => pintarDetalle().catch(() => {})));
       m.el.querySelector('[data-d=editar]').addEventListener('click', () => editarCliente(cli, () => pintarDetalle().catch(() => {})));
     }
 

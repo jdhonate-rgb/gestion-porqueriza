@@ -341,3 +341,13 @@ input[type="file"] { width: 100%; padding: .6rem 0; font-size: 1rem; }
   .acciones-cab { width: 100%; }
   .acciones-cab .btn { flex: 1; }
 }
+
+/* ---------- Ruta automática ---------- */
+.atajos { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .15rem; }
+.seccion { display: flex; align-items: center; gap: .6rem; margin: 1.5rem 0 .75rem; font-size: 1.25rem; }
+.seccion:first-child { margin-top: .5rem; }
+.seccion .num { font: 600 .9rem var(--f-cuerpo); background: var(--tinta); color: #fff; border-radius: 999px; padding: 0 .6rem; }
+.cliente.atrasado { border-left-color: var(--ladrillo); }
+.listo-hoy { border-style: solid; border-color: var(--verde); margin-bottom: 1rem; }
+.tarjetas + .seccion { margin-top: 2rem; }
+.caja { display: grid; gap: 1rem; }

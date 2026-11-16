@@ -13,7 +13,7 @@ repositorio privado.
 - Inicio con el estado general de la granja
 - Lotes
 - Compra de cerdos: adelantos, abonos, pago total y partos de las cerdas
-- Ruta de cobro: ruta del día, tarjeta por cliente (cobrar, anotar visita, llamar, WhatsApp, mapa) y detalle con ventas, pagos y visitas
+- Ruta de cobro automática: cada día sale sola la lista de quién toca cobrar (atrasados, los de hoy y los sin fecha), con tarjeta por cliente (cobrar, anotar visita, promesa de pago, llamar, WhatsApp, mapa) y detalle
 - Cargar cartera: importa desde Excel/CSV la cartera de lotes que ya salieron, con vista previa y sin duplicar
 
 Los demás módulos aparecen en el menú como "Pronto" y se activan por fases.
