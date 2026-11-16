@@ -1,7 +1,7 @@
 /* Compra de cerdos: compras con adelanto/abonos/pago total, y partos de las cerdas */
 import {
   db, q, money, num, fdate, today, esc, errMsg, toast, modal, errorHtml, loading,
-  bindMoney, readMoney, setMoney, withBusy, showError, getLotes,
+  bindMoney, readMoney, setMoney, withBusy, showError, getLotes, confirmar,
 } from '../lib.js';
 
 const ESTADO = {
@@ -55,6 +55,12 @@ export async function render({ root }) {
   btnNuevo.addEventListener('click', () => (st.tab === 'partos' ? abrirParto() : abrirCompra()));
   panel.addEventListener('click', (e) => {
     if (e.target.closest('[data-reintentar]')) { cargar(); return; }
+    const op = e.target.closest('[data-parto]');
+    if (op) {
+      const p = st.partos.find((x) => x.id === op.dataset.parto);
+      if (p) (op.dataset.op === 'editar' ? editarRegistro(p, cargar) : borrarRegistro(p, cargar));
+      return;
+    }
     const fila = e.target.closest('tr[data-id]');
     if (fila && st.tab === 'compras') verCompra(fila.dataset.id);
   });
@@ -156,7 +162,7 @@ export async function render({ root }) {
         <div><dt>Valor asignado</dt><dd>${money(total)}</dd></div>
       </dl>
       <div class="tabla-wrap"><table class="tabla ancha">
-        <thead><tr><th>Fecha</th><th>De</th><th>Va al</th><th class="der">Lechones</th><th class="der">Valor por lechón</th><th class="der">Valor total</th><th>Observación</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>De</th><th>Va al</th><th class="der">Lechones</th><th class="der">Valor por lechón</th><th class="der">Valor total</th><th>Observación</th><th><span class="sr">Acciones</span></th></tr></thead>
         <tbody>${st.partos.map((p) => `<tr>
           <td data-label="Fecha">${fdate(p.fecha)}</td>
           <td data-label="De">${esc(nombreLote(p.lote_origen_id))}</td>
@@ -165,6 +171,8 @@ export async function render({ root }) {
           <td data-label="Valor por lechón" class="der">${money(p.valor_unitario)}</td>
           <td data-label="Valor total" class="der">${money(p.total)}</td>
           <td data-label="Observación" class="ancho">${p.observacion ? esc(p.observacion) : ''}</td>
+          <td class="acc"><button type="button" class="btn-texto" data-parto="${esc(p.id)}" data-op="editar">Editar</button>
+            <button type="button" class="btn-texto peligro" data-parto="${esc(p.id)}" data-op="borrar">Eliminar</button></td>
         </tr>`).join('')}</tbody>
       </table></div>`;
   }
@@ -286,15 +294,21 @@ export async function render({ root }) {
           ${c.observacion ? `<div style="grid-column:1/-1"><dt>Observación</dt><dd>${esc(c.observacion)}</dd></div>` : ''}
         </dl>
 
+        <div class="acc-sec">
+          <button type="button" class="btn btn-suave" data-d="editar">Editar compra</button>
+          <button type="button" class="btn btn-peligro-suave" data-d="borrar">Eliminar compra</button>
+        </div>
+
         <h3>Pagos registrados</h3>
         ${pagos.length ? `<div class="tabla-wrap"><table class="tabla">
-          <thead><tr><th>Fecha</th><th>Tipo</th><th>Método</th><th class="der">Valor</th><th>Nota</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Método</th><th class="der">Valor</th><th>Nota</th><th></th></tr></thead>
           <tbody>${pagos.map((p) => `<tr>
             <td data-label="Fecha">${fdate(p.fecha)}</td>
             <td data-label="Tipo">${esc(CONCEPTO[p.concepto] || p.concepto)}</td>
             <td data-label="Método">${esc(METODO[p.metodo] || p.metodo)}</td>
             <td data-label="Valor" class="der">${money(p.monto)}</td>
-            <td data-label="Nota" class="ancho">${p.observacion ? esc(p.observacion) : ''}</td></tr>`).join('')}</tbody>
+            <td data-label="Nota" class="ancho">${p.observacion ? esc(p.observacion) : ''}</td>
+            <td class="acc"><button type="button" class="btn-texto peligro" data-pago="${esc(p.id)}" data-monto="${p.monto}">Anular pago</button></td></tr>`).join('')}</tbody>
         </table></div>` : '<p>Todavía no hay pagos para esta compra.</p>'}
 
         ${saldo > 0 ? `
@@ -312,6 +326,16 @@ export async function render({ root }) {
           <div class="acciones-form"><button type="submit" class="btn btn-primario">Guardar abono</button></div>
         </form>` : '<p style="margin-top:1rem"><strong>Esta compra está totalmente pagada.</strong></p>'}
       `);
+
+      m.el.querySelector('[data-d=editar]').addEventListener('click', () => editarRegistro(c, async () => { await pintar(); cargar(); }));
+      m.el.querySelector('[data-d=borrar]').addEventListener('click', () => borrarRegistro(c, () => { m.close(); cargar(); }));
+      m.el.querySelectorAll('[data-pago]').forEach((b) => b.addEventListener('click', async () => {
+        if (!(await confirmar({ titulo: 'Anular pago', boton: 'Anular pago', texto: `Se borra el pago de <strong>${money(b.dataset.monto)}</strong> y el saldo de la compra vuelve a subir. Esto no se puede deshacer.` }))) return;
+        try {
+          await q(db.from('pagos_compra_cerdos').delete().eq('id', b.dataset.pago));
+          toast('Pago anulado'); await pintar(); cargar();
+        } catch (ex) { toast(errMsg(ex), 'mal'); }
+      }));
 
       const f = m.el.querySelector('#f-abono');
       if (!f) return;
@@ -345,6 +369,82 @@ export async function render({ root }) {
 
     try { await pintar(); }
     catch (e) { m.setBody(errorHtml(e)); }
+  }
+
+  /* ---------- Editar o eliminar una compra o un parto ---------- */
+  function editarRegistro(c, alTerminar) {
+    const parto = c.tipo === 'nacimiento' || c.lote_origen_id != null;
+    const cerdas = lotes.filter((l) => l.tipo === 'cerdas');
+    const m = modal({
+      title: parto ? 'Editar parto' : 'Editar compra',
+      html: `<form id="f-edit" novalidate>
+        <div class="rejilla">
+          <div class="campo"><label for="x-fecha">Fecha</label><input id="x-fecha" type="date" value="${esc(c.fecha)}" required></div>
+          ${parto ? `<div class="campo"><label for="x-origen">Lote de las cerdas</label>
+            <select id="x-origen">${cerdas.map((l) => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('')}</select></div>` : ''}
+          <div class="campo"><label for="x-lote">${parto ? 'Lote al que van los lechones' : 'Lote destino'}</label>
+            <select id="x-lote" required>${lotes.filter((l) => !parto || l.tipo !== 'cerdas').map((l) => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('')}</select></div>
+          <div class="campo"><label for="x-cant">Cantidad ${parto ? 'de lechones' : 'de cerdos'}</label>
+            <input id="x-cant" type="number" inputmode="numeric" min="1" step="1" value="${c.cantidad}" required></div>
+          <div class="campo"><label for="x-valor">Valor por ${parto ? 'lechón' : 'cerdo'}</label>
+            <input id="x-valor" type="text" inputmode="numeric" autocomplete="off" required></div>
+        </div>
+        <p class="total-linea"><span>Total</span><strong id="x-total">${money(0)}</strong></p>
+        ${Number(c.pagado) > 0 ? `<p class="ayuda">Ya se han pagado ${money(c.pagado)}; el total no puede ser menor.</p>` : ''}
+        <div class="campo"><label for="x-obs">Observación</label><textarea id="x-obs" rows="2">${esc(c.observacion)}</textarea></div>
+        <p class="error" id="x-error" role="alert" hidden></p>
+        <div class="acciones-form">
+          <button type="button" class="btn btn-suave" data-cerrar>Cancelar</button>
+          <button type="submit" class="btn btn-primario">Guardar cambios</button>
+        </div>
+      </form>`,
+    });
+    const f = m.el.querySelector('#f-edit');
+    const $ = (id) => f.querySelector(id);
+    const err = $('#x-error');
+    bindMoney($('#x-valor')); setMoney($('#x-valor'), Number(c.valor_unitario));
+    $('#x-lote').value = String(c.lote_id);
+    if (parto && $('#x-origen')) $('#x-origen').value = String(c.lote_origen_id);
+    const total = () => Math.round((Number($('#x-cant').value) || 0) * readMoney($('#x-valor')));
+    const pintarTotal = () => { $('#x-total').textContent = money(total()); };
+    f.addEventListener('input', pintarTotal); pintarTotal();
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      const cant = Number($('#x-cant').value);
+      const valor = readMoney($('#x-valor'));
+      if (!$('#x-fecha').value) return showError(err, 'Elige la fecha.');
+      if (!Number.isInteger(cant) || cant < 1) return showError(err, 'La cantidad debe ser un número entero mayor que cero.');
+      if (valor < 0 || (!parto && valor <= 0)) return showError(err, 'Escribe el valor por unidad.');
+      await withBusy(f.querySelector('[type=submit]'), async () => {
+        try {
+          await q(db.from('compras_cerdos').update({
+            fecha: $('#x-fecha').value,
+            lote_id: Number($('#x-lote').value),
+            ...(parto ? { lote_origen_id: Number($('#x-origen').value) } : {}),
+            cantidad: cant,
+            valor_unitario: valor,
+            observacion: $('#x-obs').value.trim() || null,
+          }).eq('id', c.id));
+          m.close(); toast('Cambios guardados');
+          await alTerminar();
+        } catch (ex) { showError(err, errMsg(ex)); }
+      });
+    });
+  }
+
+  async function borrarRegistro(c, alTerminar) {
+    const parto = c.tipo === 'nacimiento' || c.lote_origen_id != null;
+    const ok = await confirmar({
+      titulo: parto ? 'Eliminar parto' : 'Eliminar compra',
+      texto: `Se borra ${parto ? 'este parto' : 'esta compra'} de <strong>${num(c.cantidad)}</strong> ${parto ? 'lechones' : 'cerdos'}${parto ? '' : ' y todos sus pagos'}. Esto no se puede deshacer.`,
+    });
+    if (!ok) return;
+    try {
+      await q(db.from('compras_cerdos').delete().eq('id', c.id));
+      toast(parto ? 'Parto eliminado' : 'Compra eliminada');
+      alTerminar();
+    } catch (ex) { toast(errMsg(ex), 'mal'); }
   }
 
   /* ---------- Registrar parto ---------- */

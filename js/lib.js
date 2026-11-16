@@ -178,3 +178,32 @@ export function modal({ title, html, wide = false }) {
 
   return { el: cuerpo, close: cerrar, setBody(h) { cuerpo.innerHTML = h; } };
 }
+
+/* ---------- Confirmación antes de borrar ---------- */
+/** Pregunta antes de una acción que no se puede deshacer. Devuelve true si el usuario confirma. */
+export function confirmar({ titulo, texto, boton = 'Eliminar' }) {
+  return new Promise((resolve) => {
+    let respondido = false;
+    const m = modal({
+      title: titulo,
+      html: `<p class="confirma-texto">${texto}</p>
+        <div class="acciones-form">
+          <button type="button" class="btn btn-suave" data-cerrar>Cancelar</button>
+          <button type="button" class="btn btn-peligro" id="btn-confirmar">${esc(boton)}</button>
+        </div>`,
+    });
+    const fondo = m.el.closest('.modal-fondo');
+    m.el.querySelector('#btn-confirmar').addEventListener('click', () => { respondido = true; resolve(true); m.close(); });
+    new MutationObserver(() => { if (!fondo.isConnected && !respondido) { respondido = true; resolve(false); } })
+      .observe(document.body, { childList: true });
+  });
+}
+
+/* ---------- Iconos ---------- */
+const ico = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+export const ICONOS = {
+  llamar: ico('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>'),
+  whatsapp: ico('<path d="M4 20l1.3-4.2A8 8 0 1 1 8.4 18.8z"/><path d="M9 9.5c.3 2.3 2.2 4.2 4.5 4.5l1.2-1.2-1.8-1-.8.6a3 3 0 0 1-1.5-1.5l.6-.8-1-1.8z"/>'),
+  mapa: ico('<path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>'),
+  cobro: ico('<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6.5 9.5v.01M17.5 14.5v.01"/>'),
+};

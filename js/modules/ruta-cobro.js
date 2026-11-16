@@ -1,7 +1,7 @@
 /* Ruta de cobro automática: cada día sale sola la lista de quién debe pagar (atrasados, los de hoy
    y los que no tienen fecha). Tarjeta por cliente, cobros, visitas, promesas y deudas nuevas. */
 import {
-  db, q, money, num, fdate, today, addDays, haceTxt, esc, errMsg, toast, modal, errorHtml, loading,
+  db, q, money, num, fdate, today, addDays, haceTxt, esc, errMsg, toast, modal, errorHtml, loading, confirmar, ICONOS,
   bindMoney, readMoney, setMoney, withBusy, showError, getLotes, telLink, waLink, mapsLink,
 } from '../lib.js';
 
@@ -69,15 +69,15 @@ export async function render({ root }) {
         <p class="sub">Aquí sale solo a quién debes cobrarle hoy. Anota los clientes que te deben y la fecha acordada; el resto lo hace la ruta.</p>
       </div>
       <div class="acciones-cab">
-        <a class="btn btn-suave" href="#/importar-cartera">Cargar cartera</a>
         <button type="button" class="btn btn-primario" id="btn-cliente">Nuevo cliente</button>
       </div>
     </header>
     <div id="resumen"></div>
     <div class="tabs" role="tablist" aria-label="Secciones">
-      <button type="button" role="tab" id="tab-hoy" aria-selected="true" aria-controls="panel">Para cobrar hoy</button>
+      <button type="button" role="tab" id="tab-hoy" aria-selected="true" aria-controls="panel">Hoy</button>
+      <button type="button" role="tab" id="tab-atrasados" aria-selected="false" aria-controls="panel">Atrasados</button>
       <button type="button" role="tab" id="tab-proximos" aria-selected="false" aria-controls="panel">Próximos</button>
-      <button type="button" role="tab" id="tab-todos" aria-selected="false" aria-controls="panel">Todos con saldo</button>
+      <button type="button" role="tab" id="tab-todos" aria-selected="false" aria-controls="panel">Todos</button>
     </div>
     <div id="panel" role="tabpanel"></div>`;
 
@@ -114,8 +114,7 @@ export async function render({ root }) {
   }
   panel.addEventListener('click', (e) => {
     if (e.target.closest('[data-reintentar]')) { cargar(); return; }
-    if (e.target.closest('[data-nuevo]')) { abrirNuevoCliente(); return; }
-    manejarAccion(e);
+    if (e.target.closest('[data-nuevo]')) abrirNuevoCliente();
   });
 
   /* ---------- Listas ---------- */
@@ -141,36 +140,34 @@ export async function render({ root }) {
     const conSaldo = st.rows.filter((r) => Number(r.saldo_total) > 0);
     const pendientes = conSaldo.filter((r) => !huboActividad(r) && (estaPendiente(r) || r.en_ruta));
     const hechos = st.rows.filter(huboActividad);
+    const atrasados = conSaldo.filter((r) => r.estado_cobro === 'atrasado');
     const proximos = conSaldo.filter((r) => r.estado_cobro === 'proximo' && !r.en_ruta);
-    return { conSaldo, pendientes, hechos, proximos };
+    return { conSaldo, pendientes, hechos, atrasados, proximos };
   };
 
   function pintarResumen() {
-    const { conSaldo, pendientes } = grupos();
-    const atrasados = conSaldo.filter((r) => r.estado_cobro === 'atrasado');
+    const g = grupos();
     const cobrado = st.rows.reduce((a, r) => a + Number(r.cobrado_hoy), 0);
-    const visitados = st.rows.filter((r) => Number(r.visitas_hoy) > 0).length;
-    const porCobrar = pendientes.reduce((a, r) => a + Number(r.saldo_total), 0);
-    resumen.innerHTML = `<dl class="resumen">
-      <div><dt>Por cobrar hoy</dt><dd class="${porCobrar > 0 ? 'deuda' : ''}">${money(porCobrar)}</dd></div>
-      <div><dt>Clientes atrasados</dt><dd class="${atrasados.length ? 'deuda' : ''}">${num(atrasados.length)}</dd></div>
-      <div><dt>Cobrado hoy</dt><dd>${money(cobrado)}</dd></div>
-      <div><dt>Cartera total</dt><dd>${money(conSaldo.reduce((a, r) => a + Number(r.saldo_total), 0))}</dd></div>
-    </dl>`;
-    root.querySelector('#tab-hoy').textContent = `Para cobrar hoy (${pendientes.length})`;
-    root.querySelector('#tab-proximos').textContent = `Próximos (${grupos().proximos.length})`;
+    const falta = g.pendientes.reduce((a, r) => a + Number(r.saldo_total), 0);
+    resumen.innerHTML = `<div class="tiles">
+      <div class="tile"><strong class="${falta > 0 ? 'deuda' : ''}">${money(falta)}</strong><span>Falta por cobrar hoy</span></div>
+      <div class="tile"><strong class="ok">${money(cobrado)}</strong><span>Cobrado hoy</span></div>
+    </div>`;
+    const t = (id, txt, n) => { root.querySelector(`#tab-${id}`).innerHTML = `${txt}<small>${n}</small>`; };
+    t('hoy', 'Hoy', g.pendientes.length); t('atrasados', 'Atrasados', g.atrasados.length);
+    t('proximos', 'Próximos', g.proximos.length); t('todos', 'Todos', g.conSaldo.length);
   }
 
   function barraFiltros() {
     const zonas = [...new Set(st.rows.map((r) => r.zona).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
     return `<div class="filtros">
-      <div class="campo grande"><label for="f-buscar">Buscar cliente</label>
-        <input id="f-buscar" type="search" value="${esc(st.buscar)}" placeholder="Nombre, barrio, dirección o teléfono" autocomplete="off"></div>
-      <div class="campo"><label for="f-zona">Zona</label>
-        <select id="f-zona"><option value="">Todas</option>${zonas.map((z) => `<option value="${esc(z)}"${z === st.zona ? ' selected' : ''}>${esc(z)}</option>`).join('')}</select></div>
-      <div class="campo"><label for="f-orden">Ordenar por</label>
-        <select id="f-orden">
-          ${[['prioridad', 'Quién urge más'], ['zona', 'Zona'], ['saldo', 'Mayor saldo'], ['fecha', 'Fecha de cobro'], ['nombre', 'Nombre']]
+      <div class="campo grande"><label for="f-buscar" class="sr">Buscar cliente o barrio</label>
+        <input id="f-buscar" type="search" value="${esc(st.buscar)}" placeholder="Buscar cliente o barrio" autocomplete="off"></div>
+      <div class="campo"><label for="f-zona" class="sr">Zona</label>
+        <select id="f-zona" aria-label="Zona"><option value="">Todas las zonas</option>${zonas.map((z) => `<option value="${esc(z)}"${z === st.zona ? ' selected' : ''}>${esc(z)}</option>`).join('')}</select></div>
+      <div class="campo"><label for="f-orden" class="sr">Ordenar por</label>
+        <select id="f-orden" aria-label="Ordenar por">
+          ${[['prioridad', 'Quién urge más'], ['zona', 'Por zona'], ['saldo', 'Mayor saldo'], ['fecha', 'Fecha de cobro'], ['nombre', 'Nombre']]
             .map(([v, t]) => `<option value="${v}"${v === st.orden ? ' selected' : ''}>${t}</option>`).join('')}
         </select></div>
     </div>`;
@@ -190,12 +187,11 @@ export async function render({ root }) {
 
   function pintar() {
     pintarResumen();
-    const { conSaldo } = grupos();
-    if (!st.rows.length || (!conSaldo.length && !grupos().hechos.length)) {
+    const g = grupos();
+    if (!st.rows.length || (!g.conSaldo.length && !g.hechos.length)) {
       panel.innerHTML = `<div class="vacio"><h2>Todavía no hay clientes con deuda</h2>
         <p>Crea un cliente, escribe cuánto te debe y la fecha en que acordaron el cobro. Cuando llegue esa fecha, aparece solo en la ruta de hoy; si ya pasó, sale como atrasado.</p>
-        <button type="button" class="btn btn-primario" data-nuevo>Nuevo cliente</button>
-        <p>¿Tienes una lista larga de deudores? <a href="#/importar-cartera">Cárgala desde Excel</a>.</p></div>`;
+        <button type="button" class="btn btn-primario" data-nuevo>Nuevo cliente</button></div>`;
       return;
     }
     panel.innerHTML = `${barraFiltros()}<div id="tarjetas"></div>`;
@@ -206,96 +202,62 @@ export async function render({ root }) {
   function pintarListas() {
     const g = grupos();
     const cont = panel.querySelector('#tarjetas');
-    const bloque = (titulo, lista, opc) => (lista.length
+    const bloque = (titulo, lista) => (lista.length
       ? `${titulo ? `<h2 class="seccion">${titulo} <span class="num">${lista.length}</span></h2>` : ''}
-         <div class="tarjetas">${lista.map((r) => tarjeta(r, opc)).join('')}</div>` : '');
+         <ul class="filas">${lista.map((r) => `<li>${fila(r)}</li>`).join('')}</ul>` : '');
+    const vacio = (h, p) => `<div class="vacio"><h2>${h}</h2>${p ? `<p>${p}</p>` : ''}</div>`;
+    const porFecha = (l) => [...l].sort((a, b) => String(a.proxima_cobro).localeCompare(String(b.proxima_cobro)));
     let html = '';
     if (st.tab === 'hoy') {
       const pend = ordenar(filtrar(g.pendientes));
       const hechos = ordenar(filtrar(g.hechos));
-      html = bloque(pend.length && hechos.length ? 'Por cobrar' : '', pend, {}) + bloque(hechos.length ? 'Ya atendidos hoy' : '', hechos, {});
+      html = bloque(pend.length && hechos.length ? 'Por cobrar' : '', pend) + bloque(hechos.length ? 'Ya atendidos hoy' : '', hechos);
       if (!pend.length && !hechos.length) {
-        const prox = ordenar(g.proximos).sort((a, b) => String(a.proxima_cobro).localeCompare(String(b.proxima_cobro)))[0];
-        html = `<div class="vacio"><h2>${g.pendientes.length || g.hechos.length ? 'Ningún cliente coincide con los filtros' : 'No tienes cobros pendientes para hoy'}</h2>
-          ${g.pendientes.length || g.hechos.length ? '' : `<p>${prox ? `El próximo cobro es el ${fdate(prox.proxima_cobro)} (${esc(prox.nombre)}).` : 'Cuando un cliente llegue a su fecha de cobro, aparece aquí solo.'}</p>`}</div>`;
+        const prox = porFecha(g.proximos)[0];
+        html = g.pendientes.length || g.hechos.length ? vacio('Ningún cliente coincide con la búsqueda')
+          : vacio('No tienes cobros pendientes para hoy', prox ? `El próximo cobro es el ${fdate(prox.proxima_cobro)} (${esc(prox.nombre)}).` : 'Cuando un cliente llegue a su fecha de cobro, aparece aquí solo.');
       } else if (!pend.length && !st.buscar && !st.zona) {
-        html = `<div class="vacio listo-hoy"><h2>Ruta del día completa</h2><p>Ya atendiste a todos los que tocaba cobrar hoy.</p></div>` + html;
+        html = '<div class="vacio listo-hoy"><h2>Ruta del día completa</h2><p>Ya atendiste a todos los que tocaba cobrar hoy.</p></div>' + html;
       }
+    } else if (st.tab === 'atrasados') {
+      const l = ordenar(filtrar(g.atrasados));
+      html = l.length ? bloque('', l) : vacio(g.atrasados.length ? 'Ningún cliente coincide con la búsqueda' : 'No hay clientes atrasados');
     } else if (st.tab === 'proximos') {
-      const lista = filtrar(g.proximos).sort((a, b) => String(a.proxima_cobro).localeCompare(String(b.proxima_cobro)));
-      html = lista.length ? bloque('', st.orden === 'prioridad' ? lista : ordenar(lista), {})
-        : '<div class="vacio"><p>No hay cobros próximos con esos filtros.</p></div>';
+      const l = filtrar(g.proximos);
+      html = l.length ? bloque('', st.orden === 'prioridad' ? porFecha(l) : ordenar(l)) : vacio(g.proximos.length ? 'Ningún cliente coincide con la búsqueda' : 'No hay cobros próximos');
     } else {
-      const lista = ordenar(filtrar(g.conSaldo));
-      html = lista.length ? `<p class="conteo">${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'}</p>${bloque('', lista, {})}`
-        : '<div class="vacio"><p>Ningún cliente coincide con los filtros.</p></div>';
+      const l = ordenar(filtrar(g.conSaldo));
+      html = l.length ? bloque('', l) : vacio('Ningún cliente coincide con la búsqueda');
     }
     cont.innerHTML = html;
   }
 
-  /* ---------- Tarjeta de cliente ---------- */
-  function tarjeta(r) {
-    const est = estadoCliente(r);
+  /* ---------- Fila de cliente (se toca para abrir su tarjeta) ---------- */
+  function montoFila(r) {
     const saldo = Number(r.saldo_total);
-    const tel = telLink(r.telefono);
-    const wa = waLink(r.telefono, `Hola ${r.nombre.split(' ')[0]}, te escribo por el saldo pendiente de ${money(saldo)}.`);
-    const mapa = mapsLink(r.direccion, r.zona);
-    const dato = (k, v) => (v ? `<div><dt>${k}</dt><dd>${v}</dd></div>` : '');
-    const ult = r.ultima_visita_fecha
-      ? `${esc(RESULTADO[r.ultima_visita_resultado] || '')}, ${haceTxt(r.ultima_visita_fecha)}${r.ultima_visita_nota ? ` · “${esc(r.ultima_visita_nota)}”` : ''}`
-      : 'Sin visitas anotadas';
-    const cobro = saldo > 0
-      ? (r.proxima_cobro
-        ? `${r.promesa_fecha ? 'Prometió pagar el' : 'Acordado para el'} ${fdate(r.proxima_cobro)} (${haceTxt(r.proxima_cobro)})`
-        : 'Sin fecha acordada')
-      : '';
-    const manual = r.en_ruta && saldo > 0 && r.estado_cobro === 'proximo';
-    const puedeAgregar = !r.en_ruta && saldo > 0 && r.estado_cobro === 'proximo';
-    return `<article class="cliente${huboActividad(r) ? ' visitado' : ''}${r.estado_cobro === 'atrasado' && !huboActividad(r) ? ' atrasado' : ''}" data-id="${esc(r.cliente_id)}" aria-label="${esc(r.nombre)}">
-      <header class="cl-cab">
-        <div>
-          <h3>${esc(r.nombre)}</h3>
-          <p class="cl-sub">${[r.zona, r.direccion].filter(Boolean).map(esc).join(' · ') || 'Sin dirección'}</p>
-        </div>
-        <div class="cl-saldo"><span>Debe</span><strong class="${saldo > 0 ? 'deuda' : ''}">${money(saldo)}</strong></div>
-      </header>
-      <p class="cl-estado"><span class="chip ${est.cls}">${esc(est.txt)}</span></p>
-      <dl class="cl-datos">
-        ${dato('Cobro', cobro)}
-        ${dato('Deuda', saldo > 0 ? `${r.ventas_pendientes} ${Number(r.ventas_pendientes) === 1 ? 'venta' : 'ventas'}, la más antigua del ${fdate(r.deuda_mas_antigua)}` : '')}
-        ${dato('Último pago', r.ultimo_pago_fecha ? `${money(r.ultimo_pago_monto)}, ${haceTxt(r.ultimo_pago_fecha)}` : 'Aún no ha pagado')}
-        ${dato('Última visita', ult)}
-        ${dato('Teléfono', r.telefono ? esc(r.telefono) : 'Sin teléfono')}
-      </dl>
-      <div class="cl-acciones">
-        ${saldo > 0 ? '<button type="button" class="btn btn-primario" data-act="cobrar">Cobrar</button>' : ''}
-        <button type="button" class="btn btn-suave" data-act="visita">Anotar visita</button>
-        ${tel ? `<a class="btn btn-suave" href="${tel}">Llamar</a>` : ''}
-        ${wa ? `<a class="btn btn-suave" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
-        ${mapa ? `<a class="btn btn-suave" href="${esc(mapa)}" target="_blank" rel="noopener">Mapa</a>` : ''}
-        <button type="button" class="btn btn-suave" data-act="detalle">Detalle</button>
-      </div>
-      ${manual ? '<div class="cl-ruta"><span>Agregado a la ruta de hoy</span><button type="button" class="btn-texto" data-act="quitar">Quitar</button></div>' : ''}
-      ${puedeAgregar ? '<div class="cl-ruta"><button type="button" class="btn-texto" data-act="agregar">Cobrarle hoy de todos modos</button></div>' : ''}
-    </article>`;
+    if (Number(r.cobrado_hoy) > 0 && saldo <= 0) return { cls: 'listo', txt: 'cobró hoy', monto: Number(r.cobrado_hoy) };
+    if (Number(r.cobrado_hoy) > 0) return { cls: 'listo', txt: `cobró ${money(r.cobrado_hoy)}`, monto: saldo };
+    if (Number(r.visitas_hoy) > 0 && r.ultima_visita_resultado === 'no_estaba') return { cls: 'sin', txt: 'no estaba', monto: saldo };
+    if (r.promesa_fecha && r.estado_cobro === 'proximo') return { cls: 'prox', txt: `promete ${fdate(r.promesa_fecha).replace(/ \d{4}$/, '')}`, monto: saldo };
+    if (r.estado_cobro === 'atrasado') { const n = Number(r.dias_atraso); return { cls: 'atras', txt: `atrasado ${n} ${n === 1 ? 'día' : 'días'}`, monto: saldo }; }
+    if (r.estado_cobro === 'hoy') return { cls: 'hoy', txt: 'cobrar hoy', monto: saldo };
+    if (r.estado_cobro === 'sin_fecha') return { cls: 'sin', txt: 'sin fecha', monto: saldo };
+    return { cls: 'prox', txt: `cobro ${fdate(r.proxima_cobro).replace(/ \d{4}$/, '')}`, monto: saldo };
   }
-
-  async function manejarAccion(e) {
-    const btn = e.target.closest('[data-act]');
-    if (!btn) return;
-    const id = btn.closest('article')?.dataset.id;
-    const r = st.rows.find((x) => x.cliente_id === id);
-    if (!r) return;
-    const act = btn.dataset.act;
-    if (act === 'cobrar') abrirCobro(r);
-    else if (act === 'visita') abrirVisita(r);
-    else if (act === 'detalle') abrirDetalle(r);
-    else if (act === 'agregar') {
-      await ejecutar(() => q(db.rpc('agregar_a_ruta', { p_fecha: today(), p_clientes: [id] })), 'Agregado a la ruta de hoy');
-    } else if (act === 'quitar') {
-      await ejecutar(() => q(db.from('cobro_ruta_dia').delete().eq('fecha', today()).eq('cliente_id', id)), 'Quitado de la ruta de hoy');
-    }
+  function fila(r) {
+    const m = montoFila(r);
+    const sub = [r.zona, r.direccion || r.telefono].filter(Boolean).map(esc).join(' · ') || 'Sin zona';
+    return `<button type="button" class="fila-cliente ${m.cls}" data-id="${esc(r.cliente_id)}" aria-label="${esc(r.nombre)}, debe ${money(r.saldo_total)}, ${esc(m.txt)}">
+      <span class="fc-info"><strong>${esc(r.nombre)}</strong><small>${sub}</small></span>
+      <span class="fc-monto"><b>${money(m.monto)}</b><small>${esc(m.txt)}</small></span>
+    </button>`;
   }
+  panel.addEventListener('click', (e) => {
+    const b = e.target.closest('.fila-cliente');
+    if (!b) return;
+    const r = st.rows.find((x) => x.cliente_id === b.dataset.id);
+    if (r) abrirDetalle(r);
+  });
 
   async function ejecutar(fn, aviso) {
     try { await fn(); if (aviso) toast(aviso); await cargar(true); }
@@ -547,7 +509,7 @@ export async function render({ root }) {
     });
   }
 
-  /* ---------- Detalle del cliente ---------- */
+  /* ---------- Tarjeta del cliente ---------- */
   async function abrirDetalle(r0) {
     const id = r0.cliente_id;
     const m = modal({ title: r0.nombre, html: loading(), wide: true });
@@ -559,59 +521,78 @@ export async function render({ root }) {
         q(db.from('v_pagos_cliente').select('*').eq('cliente_id', id).order('fecha', { ascending: false }).order('created_at', { ascending: false })),
         q(db.from('cobro_visitas').select('*').eq('cliente_id', id).order('fecha', { ascending: false }).order('created_at', { ascending: false }).limit(30)),
       ]);
-      const r = st.rows.find((x) => x.cliente_id === id) || { ...r0, saldo_total: ventas.reduce((a, v) => a + Math.max(0, Number(v.saldo)), 0) };
+      const fila0 = st.rows.find((x) => x.cliente_id === id);
       const saldo = ventas.reduce((a, v) => a + Math.max(0, Number(v.saldo)), 0);
       const tot = ventas.reduce((a, v) => a + Number(v.total), 0);
       const pag = ventas.reduce((a, v) => a + Number(v.pagado), 0);
+      const r = { ...(fila0 || r0), saldo_total: saldo, nombre: cli.nombre };
+      const est = estadoCliente(r);
       const tel = telLink(cli.telefono); const wa = waLink(cli.telefono); const mapa = mapsLink(cli.direccion, cli.zona);
+      const tile = (href, ico, txt, ext) => (href
+        ? `<a class="tile-acc" href="${esc(href)}"${ext ? ' target="_blank" rel="noopener"' : ''}>${ICONOS[ico]}<span>${txt}</span></a>`
+        : `<span class="tile-acc off" aria-disabled="true">${ICONOS[ico]}<span>${txt}</span></span>`);
       const ESTV = { pagada: ['Pagada', 'chip-verde'], parcial: ['Abonada', 'chip-ocre'], pendiente: ['Sin pago', 'chip-rojo'] };
-      m.setBody(`
-        <div class="cl-acciones cl-acciones-det">
-          ${saldo > 0 ? '<button type="button" class="btn btn-primario" data-d="cobrar">Cobrar</button>' : ''}
-          <button type="button" class="btn btn-suave" data-d="visita">Anotar visita</button>
-          ${tel ? `<a class="btn btn-suave" href="${tel}">Llamar</a>` : ''}
-          ${wa ? `<a class="btn btn-suave" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
-          ${mapa ? `<a class="btn btn-suave" href="${esc(mapa)}" target="_blank" rel="noopener">Mapa</a>` : ''}
-          <button type="button" class="btn btn-suave" data-d="deuda">Anotar deuda</button>
-          <button type="button" class="btn btn-suave" data-d="editar">Editar datos</button>
-        </div>
-        <dl class="resumen">
-          <div><dt>Debe</dt><dd class="${saldo > 0 ? 'deuda' : ''}">${money(saldo)}</dd></div>
-          <div><dt>Total vendido</dt><dd>${money(tot)}</dd></div>
-          <div><dt>Total pagado</dt><dd>${money(pag)}</dd></div>
-        </dl>
-        <dl class="detalle">
-          <div><dt>Teléfono</dt><dd>${cli.telefono ? esc(cli.telefono) : 'Sin teléfono'}</dd></div>
-          <div><dt>Zona</dt><dd>${cli.zona ? esc(cli.zona) : 'Sin zona'}</dd></div>
-          <div><dt>Dirección</dt><dd>${cli.direccion ? esc(cli.direccion) : 'Sin dirección'}</dd></div>
-          ${cli.documento ? `<div><dt>Documento</dt><dd>${esc(cli.documento)}</dd></div>` : ''}
-          ${cli.notas ? `<div style="grid-column:1/-1"><dt>Notas</dt><dd>${esc(cli.notas)}</dd></div>` : ''}
-        </dl>
+      const pct = tot > 0 ? Math.round((pag / tot) * 100) : 0;
+      const cobroTxt = saldo > 0
+        ? (r.proxima_cobro ? `${r.promesa_fecha ? 'Prometió pagar el' : 'Acordado para el'} ${fdate(r.proxima_cobro)} (${haceTxt(r.proxima_cobro)})` : 'Sin fecha acordada')
+        : 'Sin deuda';
+      const kv = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+      const puedeAdelantar = fila0 && !fila0.en_ruta && saldo > 0 && fila0.estado_cobro === 'proximo';
+      const puedeQuitar = fila0 && fila0.en_ruta && saldo > 0 && fila0.estado_cobro === 'proximo';
+      const totalCobro = (p) => (p.cobro_id ? pagos.filter((x) => x.cobro_id === p.cobro_id).reduce((a, x) => a + Number(x.monto), 0) : Number(p.monto));
 
-        <h3>Ventas y deudas</h3>
+      m.setBody(`
+        <div class="det-cab">
+          <div><p class="det-estado"><span class="chip ${est.cls}">${esc(est.txt)}</span></p>
+            <p class="det-sub">${[cli.zona, cli.direccion].filter(Boolean).map(esc).join(' · ') || 'Sin dirección'}</p></div>
+          <div class="monto-grande ${saldo > 0 ? montoFila(r).cls : 'listo'}"><b>${money(saldo)}</b><span>${saldo > 0 ? 'debe' : 'al día'}</span></div>
+        </div>
+        <div class="tres-acc">${tile(tel, 'llamar', 'Llamar')}${tile(wa, 'whatsapp', 'WhatsApp', true)}${tile(mapa, 'mapa', 'Mapa', true)}</div>
+        <div class="progreso"><p><span>${money(pag)} pagados de ${money(tot)}</span><b>${pct} %</b></p>
+          <div class="barra" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Porcentaje pagado"><i style="width:${pct}%"></i></div></div>
+        <dl class="cuadricula">
+          ${kv('Total de deudas', money(tot))}${kv('Pagado', money(pag))}
+          ${kv('Saldo', `<span class="${saldo > 0 ? 'deuda' : ''}">${money(saldo)}</span>`)}${kv('Cobro', cobroTxt)}
+          ${kv('Último pago', fila0?.ultimo_pago_fecha ? `${money(fila0.ultimo_pago_monto)}, ${haceTxt(fila0.ultimo_pago_fecha)}` : 'Aún no ha pagado')}
+          ${kv('Teléfono', cli.telefono ? esc(cli.telefono) : '—')}
+          ${cli.documento ? kv('Documento', esc(cli.documento)) : ''}
+          ${cli.notas ? `<div class="ancho"><dt>Notas</dt><dd>${esc(cli.notas)}</dd></div>` : ''}
+        </dl>
+        <div class="acc-sec">
+          <button type="button" class="btn btn-suave" data-d="visita">Anotar visita</button>
+          <button type="button" class="btn btn-suave" data-d="deuda">Anotar deuda</button>
+          <button type="button" class="btn btn-suave" data-d="editar">Editar cliente</button>
+          ${puedeAdelantar ? '<button type="button" class="btn btn-suave" data-d="agregar">Cobrarle hoy</button>' : ''}
+          ${puedeQuitar ? '<button type="button" class="btn btn-suave" data-d="quitar">Quitar de hoy</button>' : ''}
+        </div>
+
+        <h3>Deudas</h3>
         ${ventas.length ? `<div class="tabla-wrap"><table class="tabla">
-          <thead><tr><th>Fecha</th><th>De dónde</th><th>Cobrar el</th><th class="der">Total</th><th class="der">Pagado</th><th class="der">Saldo</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>De dónde</th><th>Cobrar el</th><th class="der">Total</th><th class="der">Saldo</th><th>Estado</th><th></th></tr></thead>
           <tbody>${ventas.map((v) => {
             const e = ESTV[v.estado] || [esc(v.estado), 'chip-ocre'];
             const origen = v.origen === 'migracion' ? `Cartera anterior${v.lotes ? ` (${esc(v.lotes)})` : ''}` : (v.lotes ? esc(v.lotes) : 'Venta');
             return `<tr>
               <td data-label="Fecha">${fdate(v.fecha)}</td>
-              <td data-label="De dónde" class="ancho">${origen}${v.observacion && v.observacion !== 'Cartera migrada' ? `<span class="obs">${esc(v.observacion)}</span>` : ''}</td>
-              <td data-label="Cobrar el">${Number(v.saldo) > 0 ? (v.fecha_cobro ? fdate(v.fecha_cobro) : 'Sin fecha') : ''}</td>
+              <td data-label="De dónde" class="ancho">${origen}${v.observacion && !['Cartera migrada', 'Deuda anotada'].includes(v.observacion) ? `<span class="obs">${esc(v.observacion)}</span>` : ''}</td>
+              <td data-label="Cobrar el">${Number(v.saldo) > 0 ? (v.fecha_cobro ? fdate(v.fecha_cobro) : 'Sin fecha') : '—'}</td>
               <td data-label="Total" class="der">${money(v.total)}</td>
-              <td data-label="Pagado" class="der">${money(v.pagado)}</td>
               <td data-label="Saldo" class="der ${Number(v.saldo) > 0 ? 'deuda' : ''}">${money(v.saldo)}</td>
-              <td data-label="Estado"><span class="chip ${e[1]}">${e[0]}</span></td></tr>`;
-          }).join('')}</tbody></table></div>` : '<p>Este cliente todavía no tiene ventas.</p>'}
+              <td data-label="Estado"><span class="chip ${e[1]}">${e[0]}</span></td>
+              <td class="acc">${v.origen === 'migracion'
+                ? `<button type="button" class="btn-texto" data-venta="${esc(v.venta_id)}" data-op="editar-deuda">Editar</button>
+                   <button type="button" class="btn-texto peligro" data-venta="${esc(v.venta_id)}" data-op="borrar-deuda">Eliminar</button>` : ''}</td></tr>`;
+          }).join('')}</tbody></table></div>` : '<p>Este cliente todavía no tiene deudas.</p>'}
 
         <h3>Pagos recibidos</h3>
         ${pagos.length ? `<div class="tabla-wrap"><table class="tabla">
-          <thead><tr><th>Fecha</th><th>Método</th><th class="der">Valor</th><th>Aplicado a</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Método</th><th class="der">Valor</th><th>Aplicado a</th><th></th></tr></thead>
           <tbody>${pagos.map((p) => `<tr>
             <td data-label="Fecha">${fdate(p.fecha)}</td>
             <td data-label="Método">${esc(METODO[p.metodo] || p.metodo)}</td>
             <td data-label="Valor" class="der">${money(p.monto)}</td>
-            <td data-label="Aplicado a" class="ancho">Venta del ${fdate(p.venta_fecha)}${p.observacion ? `<span class="obs">${esc(p.observacion)}</span>` : ''}</td></tr>`).join('')}</tbody>
+            <td data-label="Aplicado a" class="ancho">Deuda del ${fdate(p.venta_fecha)}${p.observacion ? `<span class="obs">${esc(p.observacion)}</span>` : ''}</td>
+            <td class="acc"><button type="button" class="btn-texto peligro" data-pago="${esc(p.pago_id)}" data-total="${totalCobro(p)}" data-op="anular">Anular cobro</button></td></tr>`).join('')}</tbody>
         </table></div>` : '<p>Todavía no hay pagos registrados.</p>'}
 
         <h3>Visitas de cobro</h3>
@@ -619,25 +600,50 @@ export async function render({ root }) {
           <strong>${esc(RESULTADO[v.resultado] || v.resultado)}</strong>${Number(v.monto) > 0 ? ` · ${money(v.monto)}` : ''}
           <span class="fecha">${fdate(v.fecha)}</span>
           ${v.promesa_fecha ? `<span class="obs">Promete pagar el ${fdate(v.promesa_fecha)}</span>` : ''}
-          ${v.nota ? `<span class="obs">${esc(v.nota)}</span>` : ''}</li>`).join('')}</ul>` : '<p>Todavía no hay visitas anotadas.</p>'}
+          ${v.nota ? `<span class="obs">${esc(v.nota)}</span>` : ''}
+          ${v.resultado !== 'cobro' ? `<button type="button" class="btn-texto peligro" data-visita="${esc(v.id)}" data-op="borrar-visita">Eliminar</button>` : ''}</li>`).join('')}</ul>` : '<p>Todavía no hay visitas anotadas.</p>'}
+        ${saldo > 0 ? `<div class="barra-fija"><button type="button" class="btn btn-primario btn-grande" data-d="cobrar">${ICONOS.cobro}<span>Registrar cobro</span></button></div>` : ''}
       `);
-      m.el.dataset.saldo = saldo;
-      m.el.querySelector('[data-d=cobrar]')?.addEventListener('click', () => {
-        abrirCobro({ ...r, cliente_id: id, nombre: cli.nombre, saldo_total: saldo }, { alTerminar: () => pintarDetalle().catch(() => {}) });
-      });
-      m.el.querySelector('[data-d=visita]').addEventListener('click', () => {
-        abrirVisita({ ...r, cliente_id: id, nombre: cli.nombre }, { alTerminar: () => pintarDetalle().catch(() => {}) });
-      });
-      m.el.querySelector('[data-d=deuda]').addEventListener('click', () => abrirDeuda({ id, nombre: cli.nombre }, () => pintarDetalle().catch(() => {})));
-      m.el.querySelector('[data-d=editar]').addEventListener('click', () => editarCliente(cli, () => pintarDetalle().catch(() => {})));
+
+      const refrescar = () => pintarDetalle().catch(() => {});
+      const $d = (s) => m.el.querySelector(`[data-d=${s}]`);
+      $d('cobrar')?.addEventListener('click', () => abrirCobro({ ...r, cliente_id: id, nombre: cli.nombre, saldo_total: saldo }, { alTerminar: refrescar }));
+      $d('visita').addEventListener('click', () => abrirVisita({ ...r, cliente_id: id, nombre: cli.nombre }, { alTerminar: refrescar }));
+      $d('deuda').addEventListener('click', () => abrirDeuda({ id, nombre: cli.nombre }, refrescar));
+      $d('editar').addEventListener('click', () => editarCliente(cli, { alTerminar: refrescar, alEliminar: () => m.close() }));
+      $d('agregar')?.addEventListener('click', async () => { await ejecutar(() => q(db.rpc('agregar_a_ruta', { p_fecha: today(), p_clientes: [id] })), 'Agregado a la ruta de hoy'); refrescar(); });
+      $d('quitar')?.addEventListener('click', async () => { await ejecutar(() => q(db.from('cobro_ruta_dia').delete().eq('fecha', today()).eq('cliente_id', id)), 'Quitado de la ruta de hoy'); refrescar(); });
+
+      m.el.querySelectorAll('[data-op]').forEach((b) => b.addEventListener('click', async () => {
+        const op = b.dataset.op;
+        try {
+          if (op === 'editar-deuda') {
+            editarDeuda(ventas.find((v) => v.venta_id === b.dataset.venta), refrescar);
+          } else if (op === 'borrar-deuda') {
+            if (!(await confirmar({ titulo: 'Eliminar deuda', texto: 'Se borra esta deuda del cliente. Esto no se puede deshacer.' }))) return;
+            await q(db.rpc('eliminar_deuda', { p_venta_id: b.dataset.venta }));
+            toast('Deuda eliminada'); await cargar(true); refrescar();
+          } else if (op === 'anular') {
+            const tc = Number(b.dataset.total);
+            if (!(await confirmar({ titulo: 'Anular cobro', boton: 'Anular cobro', texto: `Se anula el cobro de <strong>${money(tc)}</strong> y la deuda del cliente vuelve a subir ese valor. Esto no se puede deshacer.` }))) return;
+            await q(db.rpc('anular_cobro', { p_pago_id: b.dataset.pago }));
+            toast('Cobro anulado'); await cargar(true); refrescar();
+          } else if (op === 'borrar-visita') {
+            if (!(await confirmar({ titulo: 'Eliminar visita', texto: 'Se borra esta visita del historial.' }))) return;
+            await q(db.from('cobro_visitas').delete().eq('id', b.dataset.visita));
+            toast('Visita eliminada'); await cargar(true); refrescar();
+          }
+        } catch (ex) { toast(errMsg(ex), 'mal'); }
+      }));
     }
 
     try { await pintarDetalle(); } catch (e) { m.setBody(errorHtml(e)); }
   }
 
-  function editarCliente(cli, alTerminar) {
+  /* ---------- Editar o eliminar cliente ---------- */
+  function editarCliente(cli, { alTerminar, alEliminar }) {
     const m = modal({
-      title: 'Editar datos del cliente',
+      title: 'Editar cliente',
       html: `<form id="f-edit" novalidate>
         <div class="rejilla">
           <div class="campo"><label for="e-nombre">Nombre</label><input id="e-nombre" type="text" value="${esc(cli.nombre)}" required></div>
@@ -647,7 +653,9 @@ export async function render({ root }) {
         </div>
         <div class="campo"><label for="e-notas">Notas</label><textarea id="e-notas" rows="2">${esc(cli.notas)}</textarea></div>
         <p class="error" id="e-error" role="alert" hidden></p>
-        <div class="acciones-form">
+        <div class="acciones-form separado">
+          <button type="button" class="btn btn-peligro-suave" id="e-borrar">Eliminar cliente</button>
+          <span class="espacio"></span>
           <button type="button" class="btn btn-suave" data-cerrar>Cancelar</button>
           <button type="submit" class="btn btn-primario">Guardar cambios</button>
         </div>
@@ -673,6 +681,70 @@ export async function render({ root }) {
           toast('Datos guardados');
           alTerminar();
           await cargar(true);
+        } catch (ex) { showError(err, errMsg(ex)); }
+      });
+    });
+    $('#e-borrar').addEventListener('click', async () => {
+      const ok = await confirmar({
+        titulo: `Eliminar a ${cli.nombre}`,
+        texto: 'Se borra el cliente con sus deudas, cobros y visitas anotadas. Si ya tiene ventas reales, queda archivado y deja de salir en la ruta. Esto no se puede deshacer.',
+      });
+      if (!ok) return;
+      try {
+        const r = await q(db.rpc('eliminar_cliente', { p_cliente_id: cli.id }));
+        m.close(); alEliminar();
+        toast(r === 'archivado' ? 'Cliente archivado: ya no sale en la ruta' : 'Cliente eliminado');
+        await cargar(true);
+      } catch (ex) { showError($('#e-error'), errMsg(ex)); }
+    });
+  }
+
+  /* ---------- Editar una deuda anotada ---------- */
+  function editarDeuda(v, alTerminar) {
+    const m = modal({
+      title: 'Editar deuda',
+      html: `<form id="f-edeuda" novalidate>
+        <div class="campo"><label for="x-saldo">Valor total de la deuda</label>
+          <input id="x-saldo" type="text" inputmode="numeric" autocomplete="off" required>
+          ${Number(v.pagado) > 0 ? `<span class="ayuda">Ya se han cobrado ${money(v.pagado)}; el valor no puede ser menor.</span>` : ''}</div>
+        <div class="campo"><label for="x-cobro">Fecha acordada de cobro</label>
+          <input id="x-cobro" type="date" value="${esc(v.fecha_cobro ?? '')}">${atajosFecha('x-cobro')}</div>
+        <div class="rejilla">
+          <div class="campo"><label for="x-fecha">Fecha de la deuda</label><input id="x-fecha" type="date" value="${esc(v.fecha)}" max="${today()}"></div>
+          <div class="campo"><label for="x-lote">Lote del que viene</label>
+            <select id="x-lote"><option value="">No sé / varios</option>${lotes.map((l) => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('')}</select></div>
+        </div>
+        <div class="campo"><label for="x-obs">Detalle</label><input id="x-obs" type="text" autocomplete="off" value="${esc(['Cartera migrada', 'Deuda anotada'].includes(v.observacion) ? '' : v.observacion)}"></div>
+        <p class="error" id="x-error" role="alert" hidden></p>
+        <div class="acciones-form">
+          <button type="button" class="btn btn-suave" data-cerrar>Cancelar</button>
+          <button type="submit" class="btn btn-primario">Guardar cambios</button>
+        </div>
+      </form>`,
+    });
+    const f = m.el.querySelector('#f-edeuda');
+    const $ = (id) => f.querySelector(id);
+    bindMoney($('#x-saldo')); setMoney($('#x-saldo'), Number(v.total));
+    enlazarAtajos(f);
+    const lote = lotes.find((l) => v.lotes === `Lote ${l.id}`);
+    if (lote) $('#x-lote').value = String(lote.id);
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = $('#x-error'); err.hidden = true;
+      const total = readMoney($('#x-saldo'));
+      if (total <= 0) return showError(err, 'Escribe el valor de la deuda.');
+      if (!$('#x-fecha').value) return showError(err, 'Elige la fecha de la deuda.');
+      await withBusy(f.querySelector('[type=submit]'), async () => {
+        try {
+          await q(db.from('ventas').update({
+            total,
+            fecha: $('#x-fecha').value,
+            fecha_cobro: $('#x-cobro').value || null,
+            lote_origen: $('#x-lote').value ? Number($('#x-lote').value) : null,
+            observacion: $('#x-obs').value.trim() || 'Deuda anotada',
+          }).eq('id', v.venta_id));
+          m.close(); toast('Deuda actualizada');
+          await cargar(true); alTerminar();
         } catch (ex) { showError(err, errMsg(ex)); }
       });
     });
