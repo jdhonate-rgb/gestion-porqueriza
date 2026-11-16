@@ -3,6 +3,8 @@ import { db, q, esc, errMsg, resetCache } from './lib.js';
 import * as inicio from './modules/inicio.js';
 import * as lotes from './modules/lotes.js';
 import * as comprasCerdos from './modules/compras-cerdos.js';
+import * as rutaCobro from './modules/ruta-cobro.js';
+import * as importarCartera from './modules/importar-cartera.js';
 import { render as renderPronto } from './modules/pronto.js';
 
 const NOMBRE_APP = 'Granja porcina';
@@ -31,7 +33,8 @@ const NAV = [
   ] },
   { grupo: 'Comercial', items: [
     { id: 'ventas', titulo: 'Ventas', desc: 'Ventas por kilo, de contado o a crédito, entero o desprezado, con abonos parciales o pago total.' },
-    { id: 'clientes', titulo: 'Clientes y cartera', desc: 'Clientes, cartera en la calle por cliente y migración de la cartera actual.' },
+    { id: 'ruta-cobro', titulo: 'Ruta de cobro', mod: rutaCobro },
+    { id: 'importar-cartera', titulo: 'Cargar cartera', mod: importarCartera },
   ] },
   { grupo: 'Finanzas', items: [
     { id: 'gastos', titulo: 'Gastos', desc: 'Gastos por lote: operativos, medicamentos, gasolina, préstamos al operador y otros.' },

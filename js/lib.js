@@ -18,12 +18,43 @@ export function fdate(iso) {
   return `${p.day} ${p.month.replace('.', '')} ${p.year}`;
 }
 
-/** Fecha de hoy (hora local del dispositivo) como YYYY-MM-DD */
+/** Fecha de hoy en Colombia como YYYY-MM-DD (igual que hoy_co() en la base, sin importar la zona del dispositivo) */
 export function today() {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
+
+/** Suma días a una fecha ISO (YYYY-MM-DD) */
+export function addDays(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const f = new Date(Date.UTC(y, m - 1, d + n));
+  return f.toISOString().slice(0, 10);
+}
+
+/** "hoy", "ayer", "hace 12 días" a partir de una fecha ISO */
+export function haceTxt(iso) {
+  if (!iso) return '';
+  const [y1, m1, d1] = today().split('-').map(Number);
+  const [y2, m2, d2] = String(iso).slice(0, 10).split('-').map(Number);
+  const n = Math.round((Date.UTC(y1, m1 - 1, d1) - Date.UTC(y2, m2 - 1, d2)) / 86400000);
+  if (n === 0) return 'hoy';
+  if (n === 1) return 'ayer';
+  if (n === -1) return 'mañana';
+  return n > 0 ? `hace ${n} días` : `en ${-n} días`;
+}
+
+/* ---------- Enlaces de contacto ---------- */
+const soloDigitos = (t) => String(t ?? '').replace(/\D/g, '');
+export const telLink = (t) => (soloDigitos(t).length >= 7 ? `tel:${soloDigitos(t)}` : '');
+export function waLink(t, texto = '') {
+  let d = soloDigitos(t);
+  if (d.length < 7) return '';
+  if (d.length === 10 && d.startsWith('3')) d = '57' + d;   // celular colombiano sin indicativo
+  return `https://wa.me/${d}${texto ? `?text=${encodeURIComponent(texto)}` : ''}`;
+}
+export const mapsLink = (...partes) => {
+  const t = partes.filter(Boolean).join(', ').trim();
+  return t ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t)}` : '';
+};
 
 /** Escapa texto para meterlo en HTML. Úsalo con todo dato que venga del usuario o de la base. */
 export function esc(s) {
