@@ -425,3 +425,23 @@ td.acc { white-space: nowrap; text-align: right; }
   .cuadricula > div { padding: .6rem .8rem; }
   .barra-fija { margin: 1.25rem -1rem -1rem; padding: .75rem 1rem; }
 }
+
+/* ---------- Cuentas ---------- */
+.cuentas-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .85rem; margin: 1rem 0 .5rem; }
+.cuenta-tarjeta { display: grid; gap: .6rem; align-content: start; }
+.cuenta-sel { display: grid; gap: .3rem; text-align: left; width: 100%; background: var(--hoja); color: var(--tinta);
+  border: 1px solid var(--linea); border-left: 6px solid var(--suave); border-radius: 12px; padding: 1rem 1.1rem; cursor: pointer; font: inherit; }
+.cuenta-tarjeta.banco .cuenta-sel { border-left-color: #c9a227; }
+.cuenta-tarjeta.efectivo .cuenta-sel { border-left-color: var(--verde); }
+.cuenta-tarjeta.activa .cuenta-sel { outline: 2px solid var(--tinta); outline-offset: 1px; }
+.cuenta-nombre { font-weight: 600; color: var(--suave); }
+.cuenta-saldo { font: 600 clamp(1.5rem, 6vw, 2.1rem)/1.1 var(--f-titulo); }
+.cuenta-saldo.neg { color: var(--ladrillo); }
+.cuenta-pie { display: flex; flex-wrap: wrap; gap: .25rem 1rem; color: var(--suave); font-size: .92rem; }
+.total-cuentas { margin: .25rem 0 1rem; color: var(--suave); }
+.total-cuentas strong { color: var(--tinta); margin-left: .35rem; }
+.seccion-cuenta { margin: 1.25rem 0 .5rem; }
+.mov-ing { color: var(--verde); font-weight: 600; }
+.mov-egr { color: var(--ladrillo); font-weight: 600; }
+.chip-neutro { background: var(--papel); color: var(--suave); }
+.btn-sm { padding: .45rem .9rem; font-size: .95rem; }

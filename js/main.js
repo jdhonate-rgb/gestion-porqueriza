@@ -4,6 +4,7 @@ import * as inicio from './modules/inicio.js';
 import * as lotes from './modules/lotes.js';
 import * as comprasCerdos from './modules/compras-cerdos.js';
 import * as rutaCobro from './modules/ruta-cobro.js';
+import * as cuentas from './modules/cuentas.js';
 import { render as renderPronto } from './modules/pronto.js';
 
 const NOMBRE_APP = 'Granja porcina';
@@ -35,6 +36,7 @@ const NAV = [
     { id: 'ruta-cobro', titulo: 'Ruta de cobro', mod: rutaCobro },
   ] },
   { grupo: 'Finanzas', items: [
+    { id: 'cuentas', titulo: 'Cuentas', solo: 'dueno', mod: cuentas },
     { id: 'gastos', titulo: 'Gastos', desc: 'Gastos por lote: operativos, medicamentos, gasolina, préstamos al operador y otros.' },
     { id: 'granja', titulo: 'Granja', solo: 'dueno', desc: 'Inversiones de la granja (nevera, báscula, herramientas) que se recuperan poco a poco en cada liquidación.' },
     { id: 'liquidacion', titulo: 'Liquidación', solo: 'dueno', desc: 'Cierre mensual por lotes: ingresos, costos, descuentos y la parte del operador.' },

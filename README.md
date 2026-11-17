@@ -15,6 +15,7 @@ repositorio privado.
 - Compra de cerdos: adelantos, abonos, pago total y partos de las cerdas
 - Ruta de cobro automática: sale sola la lista de quién toca cobrar (atrasados, hoy, próximos), con tarjeta por cliente (cobrar, visita, promesa, llamar, WhatsApp, mapa). Los clientes y sus deudas se crean desde "Nuevo cliente"
 - Editar y eliminar (con confirmación) en clientes, deudas, cobros, visitas y compras de cerdos
+- Cuentas (solo dueño): Bancolombia (transferencias) y Efectivo porqueriza, con saldo inicial, detalle de cada movimiento, movimientos manuales y traslados entre cuentas; los cobros y pagos entran solos
 
 Los demás módulos aparecen en el menú como "Pronto" y se activan por fases.
 
