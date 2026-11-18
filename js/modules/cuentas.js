@@ -274,7 +274,7 @@ export async function render({ root }) {
 
   /* ---------- Traslado ---------- */
   function abrirTraslado() {
-    if (st.cuentas.length < 2) return toast('Se necesitan dos cuentas para trasladar', 'error');
+    if (st.cuentas.length < 2) return toast('Se necesitan dos cuentas para trasladar', 'mal');
     const opts = (sel) => st.cuentas.map((c) => `<option value="${c.id}"${c.id === sel ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
     const origen = st.cuentaId ?? st.cuentas[0].id;
     const destino = st.cuentas.find((c) => c.id !== origen).id;
@@ -332,7 +332,7 @@ export async function render({ root }) {
     try {
       await q(db.rpc('eliminar_movimiento_cuenta', { p_id: mov.ref_id }));
       toast('Eliminado'); await cargar();
-    } catch (ex) { toast(errMsg(ex), 'error'); }
+    } catch (ex) { toast(errMsg(ex), 'mal'); }
   }
 
   cargar();

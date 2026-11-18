@@ -1,0 +1,15 @@
+/* Estilos de los módulos del grupo A */
+
+/* ---------- Ventas ---------- */
+.fila-click { cursor: pointer; }
+.fila-click:hover { background: var(--papel); }
+.item-venta { border: 1px solid var(--linea); border-radius: 12px; padding: .75rem; margin-bottom: .6rem; background: var(--hoja); }
+.item-pie { display: flex; justify-content: space-between; align-items: center; margin-top: .25rem; }
+.item-sub { font-weight: 600; }
+.aviso-cartera { background: #fff4d6; border: 1px solid #e6c874; border-radius: 10px; padding: .6rem .8rem; margin: .5rem 0; }
+.sub-titulo { margin: 1rem 0 .4rem; }
+.detalle-venta h4 { margin: 1rem 0 .4rem; }
+.detalle-venta .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+.detalle-venta .tile { padding: .6rem .7rem; }
+.detalle-venta .tile strong { font-size: clamp(1rem, 3.6vw, 1.35rem); }
+@media (max-width: 480px) { .detalle-venta .tiles { grid-template-columns: 1fr; } }

@@ -5,6 +5,7 @@ import * as lotes from './modules/lotes.js';
 import * as comprasCerdos from './modules/compras-cerdos.js';
 import * as rutaCobro from './modules/ruta-cobro.js';
 import * as cuentas from './modules/cuentas.js';
+import * as ventas from './modules/ventas.js';
 import { render as renderPronto } from './modules/pronto.js';
 
 const NOMBRE_APP = 'Granja porcina';
@@ -32,7 +33,7 @@ const NAV = [
     { id: 'sacrificio', titulo: 'Sacrificio', desc: 'Fecha, lote, cantidad de cerdos y peso en canal. Lo sacrificado queda listo para vender.' },
   ] },
   { grupo: 'Comercial', items: [
-    { id: 'ventas', titulo: 'Ventas', desc: 'Ventas por kilo, de contado o a crédito, entero o desprezado, con abonos parciales o pago total.' },
+    { id: 'ventas', titulo: 'Ventas', mod: ventas },
     { id: 'ruta-cobro', titulo: 'Ruta de cobro', mod: rutaCobro },
   ] },
   { grupo: 'Finanzas', items: [
