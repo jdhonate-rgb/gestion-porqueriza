@@ -18,6 +18,7 @@ repositorio privado.
 - Cuentas (solo dueño): Bancolombia (transferencias) y Efectivo porqueriza, con saldo inicial, detalle de cada movimiento, movimientos manuales y traslados entre cuentas; los cobros y pagos entran solos
 - Ventas: por kilo, de contado o a crédito (con abono inicial y fecha de cobro); detalle, pagos, editar y eliminar
 - Sacrificio y Bajas: registro por lote con control de inventario, editar y eliminar
+- Compra de alimento y Bodega: la compra entra sola a bodega, salidas a cada lote con costo promedio, consumo por lote; editar y eliminar
 
 Los demás módulos aparecen en el menú como "Pronto" y se activan por fases.
 

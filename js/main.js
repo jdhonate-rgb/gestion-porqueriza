@@ -6,6 +6,8 @@ import * as comprasCerdos from './modules/compras-cerdos.js';
 import * as rutaCobro from './modules/ruta-cobro.js';
 import * as cuentas from './modules/cuentas.js';
 import * as ventas from './modules/ventas.js';
+import * as comprasAlimento from './modules/compras-alimento.js';
+import * as bodega from './modules/bodega.js';
 import * as bajas from './modules/bajas.js';
 import * as sacrificio from './modules/sacrificio.js';
 import { render as renderPronto } from './modules/pronto.js';
@@ -29,8 +31,8 @@ const NAV = [
   { grupo: 'Operación', items: [
     { id: 'lotes', titulo: 'Lotes', mod: lotes },
     { id: 'compras-cerdos', titulo: 'Compra de cerdos', mod: comprasCerdos },
-    { id: 'alimentos', titulo: 'Compra de alimento', desc: 'Compra de Preinicio, Inicio, Levante, Finalizador, Gestación y Lactancia a Campo Vallenato y Pastal. Toda compra entra a bodega.' },
-    { id: 'bodega', titulo: 'Bodega', desc: 'Existencias de alimento y salidas a cada lote, con fecha y cantidad. Cada salida carga su costo al lote.' },
+    { id: 'alimentos', titulo: 'Compra de alimento', mod: comprasAlimento },
+    { id: 'bodega', titulo: 'Bodega', mod: bodega },
     { id: 'bajas', titulo: 'Bajas', mod: bajas },
     { id: 'sacrificio', titulo: 'Sacrificio', mod: sacrificio },
   ] },
