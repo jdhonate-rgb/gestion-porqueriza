@@ -6,6 +6,8 @@ import * as comprasCerdos from './modules/compras-cerdos.js';
 import * as rutaCobro from './modules/ruta-cobro.js';
 import * as cuentas from './modules/cuentas.js';
 import * as ventas from './modules/ventas.js';
+import * as bajas from './modules/bajas.js';
+import * as sacrificio from './modules/sacrificio.js';
 import { render as renderPronto } from './modules/pronto.js';
 
 const NOMBRE_APP = 'Granja porcina';
@@ -29,8 +31,8 @@ const NAV = [
     { id: 'compras-cerdos', titulo: 'Compra de cerdos', mod: comprasCerdos },
     { id: 'alimentos', titulo: 'Compra de alimento', desc: 'Compra de Preinicio, Inicio, Levante, Finalizador, Gestación y Lactancia a Campo Vallenato y Pastal. Toda compra entra a bodega.' },
     { id: 'bodega', titulo: 'Bodega', desc: 'Existencias de alimento y salidas a cada lote, con fecha y cantidad. Cada salida carga su costo al lote.' },
-    { id: 'bajas', titulo: 'Bajas', desc: 'Registro de cerdos muertos por lote, para que el inventario siempre cuadre.' },
-    { id: 'sacrificio', titulo: 'Sacrificio', desc: 'Fecha, lote, cantidad de cerdos y peso en canal. Lo sacrificado queda listo para vender.' },
+    { id: 'bajas', titulo: 'Bajas', mod: bajas },
+    { id: 'sacrificio', titulo: 'Sacrificio', mod: sacrificio },
   ] },
   { grupo: 'Comercial', items: [
     { id: 'ventas', titulo: 'Ventas', mod: ventas },

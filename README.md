@@ -17,6 +17,7 @@ repositorio privado.
 - Editar y eliminar (con confirmación) en clientes, deudas, cobros, visitas y compras de cerdos
 - Cuentas (solo dueño): Bancolombia (transferencias) y Efectivo porqueriza, con saldo inicial, detalle de cada movimiento, movimientos manuales y traslados entre cuentas; los cobros y pagos entran solos
 - Ventas: por kilo, de contado o a crédito (con abono inicial y fecha de cobro); detalle, pagos, editar y eliminar
+- Sacrificio y Bajas: registro por lote con control de inventario, editar y eliminar
 
 Los demás módulos aparecen en el menú como "Pronto" y se activan por fases.
 
