@@ -57,3 +57,5 @@ js/modules/           un archivo por módulo
 - En Supabase conviene desactivar el registro abierto (**Authentication → Sign In / Providers →
   Allow new users to sign up**) para que solo el administrador cree usuarios.
 - Nunca subas claves `service_role`, contraseñas ni archivos `.env`.
+
+- **Gastos**: por lote y tipo (operativo, medicamento, gasolina, otro, préstamo al operador), con método de pago que alimenta Cuentas; crear, editar y eliminar.

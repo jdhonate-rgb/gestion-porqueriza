@@ -8,6 +8,7 @@ import * as cuentas from './modules/cuentas.js';
 import * as ventas from './modules/ventas.js';
 import * as comprasAlimento from './modules/compras-alimento.js';
 import * as bodega from './modules/bodega.js';
+import * as gastos from './modules/gastos.js';
 import * as bajas from './modules/bajas.js';
 import * as sacrificio from './modules/sacrificio.js';
 import { render as renderPronto } from './modules/pronto.js';
@@ -42,7 +43,7 @@ const NAV = [
   ] },
   { grupo: 'Finanzas', items: [
     { id: 'cuentas', titulo: 'Cuentas', solo: 'dueno', mod: cuentas },
-    { id: 'gastos', titulo: 'Gastos', desc: 'Gastos por lote: operativos, medicamentos, gasolina, préstamos al operador y otros.' },
+    { id: 'gastos', titulo: 'Gastos', mod: gastos },
     { id: 'granja', titulo: 'Granja', solo: 'dueno', desc: 'Inversiones de la granja (nevera, báscula, herramientas) que se recuperan poco a poco en cada liquidación.' },
     { id: 'liquidacion', titulo: 'Liquidación', solo: 'dueno', desc: 'Cierre mensual por lotes: ingresos, costos, descuentos y la parte del operador.' },
     { id: 'reportes', titulo: 'Reportes', desc: 'Rentabilidad por lote, ventas por mes, cartera en la calle y más.' },
