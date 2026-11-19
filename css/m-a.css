@@ -38,3 +38,9 @@
 .resumen-liq .sub-total { font-weight: 600; background: rgba(31, 51, 80, .04); }
 .resumen-liq .gran-total { font: 600 1.1rem/1.3 var(--f-titulo); color: var(--tinta); background: rgba(226, 125, 139, .12); }
 .monto-desc { width: 100%; max-width: 12rem; text-align: right; }
+
+/* Reportes */
+.barra { display: block; height: 6px; margin-top: .35rem; background: rgba(31, 51, 80, .08); border-radius: 3px; overflow: hidden; max-width: 14rem; }
+.barra i { display: block; height: 100%; background: var(--tinta, #1F3350); border-radius: 3px; }
+.barra.neg i { background: var(--ladrillo, #B5443A); }
+.der { text-align: right; }

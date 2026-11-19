@@ -61,3 +61,4 @@ js/modules/           un archivo por módulo
 - **Gastos**: por lote y tipo (operativo, medicamento, gasolina, otro, préstamo al operador), con método de pago que alimenta Cuentas; crear, editar y eliminar.
 - **Liquidación** (solo dueño): se calcula por lotes y período; descuentos de inversiones y préstamos editables; al cerrar queda de solo lectura.
 - **Granja** (solo dueño): inversiones con método de pago (salen de Cuentas), saldo por recuperar; las ya descontadas en una liquidación cerrada están protegidas.
+- **Reportes**: rentabilidad por lote, ventas por mes, gastos por mes y cartera, con descarga a CSV (Excel).

@@ -11,6 +11,7 @@ import * as bodega from './modules/bodega.js';
 import * as gastos from './modules/gastos.js';
 import * as liquidacion from './modules/liquidacion.js';
 import * as granja from './modules/granja.js';
+import * as reportes from './modules/reportes.js';
 import * as bajas from './modules/bajas.js';
 import * as sacrificio from './modules/sacrificio.js';
 import { render as renderPronto } from './modules/pronto.js';
@@ -48,7 +49,7 @@ const NAV = [
     { id: 'gastos', titulo: 'Gastos', mod: gastos },
     { id: 'granja', titulo: 'Granja', solo: 'dueno', mod: granja },
     { id: 'liquidacion', titulo: 'Liquidación', solo: 'dueno', mod: liquidacion },
-    { id: 'reportes', titulo: 'Reportes', desc: 'Rentabilidad por lote, ventas por mes, cartera en la calle y más.' },
+    { id: 'reportes', titulo: 'Reportes', mod: reportes },
   ] },
 ];
 const TODOS = NAV.flatMap((n) => n.items || [n]);
