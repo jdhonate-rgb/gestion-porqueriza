@@ -201,6 +201,7 @@ async function arrancar(session) {
   app.innerHTML = '<p class="cargando" role="status">Cargando…</p>';
   try {
     perfil = await q(db.from('perfiles').select('nombre,rol,activo').eq('id', uid).maybeSingle());
+    document.body.dataset.rol = perfil?.rol || '';
   } catch (e) {
     pantallaSimple('No se pudo entrar', esc(errMsg(e)),
       '<p style="margin-top:1rem"><button class="btn btn-suave" id="btn-salir">Cerrar sesión</button></p>');
