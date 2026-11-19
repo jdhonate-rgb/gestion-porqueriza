@@ -62,3 +62,4 @@ js/modules/           un archivo por módulo
 - **Liquidación** (solo dueño): se calcula por lotes y período; descuentos de inversiones y préstamos editables; al cerrar queda de solo lectura.
 - **Granja** (solo dueño): inversiones con método de pago (salen de Cuentas), saldo por recuperar; las ya descontadas en una liquidación cerrada están protegidas.
 - **Reportes**: rentabilidad por lote, ventas por mes, gastos por mes y cartera, con descarga a CSV (Excel).
+- **Inicio**: cobros de hoy y atrasados, saldos de cuentas (dueño), aviso de alimento por acabarse y accesos rápidos.

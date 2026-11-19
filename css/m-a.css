@@ -44,3 +44,11 @@
 .barra i { display: block; height: 100%; background: var(--tinta, #1F3350); border-radius: 3px; }
 .barra.neg i { background: var(--ladrillo, #B5443A); }
 .der { text-align: right; }
+
+/* Inicio */
+.inicio-hoy { margin: 1rem 0 1.5rem; }
+.tile-enlace { text-decoration: none; color: inherit; }
+.tile-enlace:hover { border-color: var(--tinta); }
+.cuentas-inicio { margin: .75rem 0; }
+.aviso-stock { margin: .75rem 0; padding: .6rem .9rem; border-radius: 10px; background: rgba(226, 125, 139, .12); }
+.accesos { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0 0; }
