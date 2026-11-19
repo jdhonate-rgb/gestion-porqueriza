@@ -59,3 +59,4 @@ js/modules/           un archivo por módulo
 - Nunca subas claves `service_role`, contraseñas ni archivos `.env`.
 
 - **Gastos**: por lote y tipo (operativo, medicamento, gasolina, otro, préstamo al operador), con método de pago que alimenta Cuentas; crear, editar y eliminar.
+- **Liquidación** (solo dueño): se calcula por lotes y período; descuentos de inversiones y préstamos editables; al cerrar queda de solo lectura.
