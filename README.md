@@ -63,3 +63,10 @@ js/modules/           un archivo por módulo
 - **Granja** (solo dueño): inversiones con método de pago (salen de Cuentas), saldo por recuperar; las ya descontadas en una liquidación cerrada están protegidas.
 - **Reportes**: rentabilidad por lote, ventas por mes, gastos por mes y cartera, con descarga a CSV (Excel).
 - **Inicio**: cobros de hoy y atrasados, saldos de cuentas (dueño), aviso de alimento por acabarse y accesos rápidos.
+
+## Seguridad
+- Cada tabla tiene RLS; sin sesión no se puede leer ni escribir nada. Solo el dueño ve cuentas, liquidación, granja y auditoría.
+- Content-Security-Policy estricta (solo scripts propios; la librería de Supabase va incluida en `js/vendor/`, sin CDN).
+- La sesión se cierra sola tras 30 minutos sin uso.
+- Auditoría inalterable de cambios (Reportes → Auditoría, solo dueño) y respaldo completo descargable (Reportes → Respaldo).
+- Ajustes del panel de Supabase que se hacen a mano: desactivar registros nuevos, activar protección de contraseñas filtradas, contraseña larga.

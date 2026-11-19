@@ -52,3 +52,4 @@
 .cuentas-inicio { margin: .75rem 0; }
 .aviso-stock { margin: .75rem 0; padding: .6rem .9rem; border-radius: 10px; background: rgba(226, 125, 139, .12); }
 .accesos { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0 0; }
+.obs-aud { font-size: .85rem; color: var(--tinta-suave, #54627a); overflow-wrap: anywhere; }

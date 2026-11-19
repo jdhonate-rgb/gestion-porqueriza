@@ -16,12 +16,14 @@ function csv(nombre, cols, filas) {
 
 const barra = (v, max, clase = '') => `<span class="barra ${clase}" aria-hidden="true"><i style="width:${max > 0 ? Math.max(0, Math.min(100, (Math.abs(v) / max) * 100)) : 0}%"></i></span>`;
 
-export async function render({ root }) {
+export async function render({ root, perfil }) {
+  const esDueno = perfil && perfil.rol === 'dueno';
   const VISTAS = {
     rentabilidad: { t: 'Rentabilidad por lote', f: rentabilidad },
     ventas: { t: 'Ventas por mes', f: ventas },
     gastos: { t: 'Gastos por mes', f: gastos },
     cartera: { t: 'Cartera', f: cartera },
+    ...(esDueno ? { auditoria: { t: 'Auditoría', f: auditoria }, respaldo: { t: 'Respaldo', f: respaldo } } : {}),
   };
   let actual = 'rentabilidad'; let carga = 0;
   root.innerHTML = `
@@ -123,6 +125,67 @@ export async function render({ root }) {
     p.querySelector('#csv').addEventListener('click', () => csv('cartera-clientes', [
       { t: 'Cliente', v: (x) => x.nombre }, { t: 'Teléfono', v: (x) => x.telefono }, { t: 'Ventas pendientes', v: (x) => x.ventas_pendientes },
       { t: 'Deuda más antigua', v: (x) => x.deuda_mas_antigua }, { t: 'Saldo', v: (x) => x.saldo_total }], c));
+  }
+
+  const TABLAS = {
+    perfiles: 'Usuarios', lotes: 'Lotes', clientes: 'Clientes', compras_cerdos: 'Compra de cerdos', pagos_compra_cerdos: 'Pago de compra de cerdos',
+    sacrificios: 'Sacrificio', bajas: 'Bajas', ventas: 'Ventas', venta_items: 'Ítem de venta', pagos_venta: 'Cobro / pago de venta',
+    compras_alimento: 'Compra de alimento', movimientos_bodega: 'Bodega', gastos: 'Gastos', gastos_granja: 'Inversión de granja',
+    cuentas: 'Cuentas', movimientos_cuenta: 'Movimiento de cuenta', liquidaciones: 'Liquidación', liquidacion_lotes: 'Liquidación por lote',
+    liquidacion_descuentos: 'Descuento de liquidación',
+  };
+  const OPER = { INSERT: ['Creó', 'chip-verde'], UPDATE: ['Cambió', 'chip-ocre'], DELETE: ['Eliminó', 'chip-rojo'] };
+  const SALTAR = new Set(['id', 'created_at', 'created_by', 'updated_at']);
+  const dato = (v) => (v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
+  const detalleAud = (a) => {
+    const base = a.operacion === 'DELETE' ? a.antes : a.despues;
+    if (a.operacion === 'UPDATE') {
+      const ks = Object.keys(a.despues || {}).filter((k) => !SALTAR.has(k) && dato(a.antes?.[k]) !== dato(a.despues[k]));
+      return ks.map((k) => `${esc(k)}: ${esc(dato(a.antes?.[k]))} → ${esc(dato(a.despues[k]))}`).join('<br>') || '—';
+    }
+    return Object.entries(base || {}).filter(([k, v]) => !SALTAR.has(k) && v !== null).slice(0, 6).map(([k, v]) => `${esc(k)}: ${esc(dato(v))}`).join('<br>');
+  };
+
+  async function auditoria(p) {
+    const [f, perf] = await Promise.all([
+      q(db.from('auditoria').select('id,momento,usuario,tabla,operacion,antes,despues').order('momento', { ascending: false }).limit(200)),
+      q(db.from('perfiles').select('id,nombre')),
+    ]);
+    const nom = new Map(perf.map((x) => [x.id, x.nombre]));
+    if (!f.length) { p.innerHTML = '<div class="vacio"><p>Todavía no hay movimientos registrados.</p></div>'; return; }
+    p.innerHTML = `<p class="ayuda">Aquí queda anotado quién creó, cambió o eliminó información, y cómo era antes. Nadie puede modificar ni borrar este registro. Se muestran los últimos 200 movimientos.</p>
+      <div class="tabla-wrap"><table class="tabla ancha"><thead><tr><th>Fecha y hora</th><th>Quién</th><th>Qué</th><th>Detalle</th></tr></thead>
+      <tbody>${f.map((a) => `<tr>
+        <td data-label="Fecha y hora">${esc(new Date(a.momento).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }))}</td>
+        <td data-label="Quién">${esc(nom.get(a.usuario) || (a.usuario ? 'Usuario' : 'Sistema'))}</td>
+        <td data-label="Qué" class="ancho"><span class="chip ${OPER[a.operacion][1]}">${OPER[a.operacion][0]}</span> <strong>${esc(TABLAS[a.tabla] || a.tabla)}</strong></td>
+        <td data-label="Detalle" class="obs-aud">${detalleAud(a)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  async function respaldo(p) {
+    p.innerHTML = `<p class="ayuda">Descarga una copia de todos los datos de la granja en un solo archivo. Guárdala en un lugar seguro (por ejemplo, tu Google Drive personal) cada semana. Contiene información privada: no la compartas.</p>
+      <p><button type="button" class="btn btn-primario" id="bk">Descargar respaldo completo</button></p>
+      <p class="ayuda" id="bk-estado" role="status"></p>`;
+    p.querySelector('#bk').addEventListener('click', async (e) => {
+      const b = e.currentTarget; b.disabled = true; const est = p.querySelector('#bk-estado'); est.textContent = 'Preparando la copia…';
+      try {
+        const out = { generado: new Date().toISOString(), tablas: {} };
+        for (const t of Object.keys(TABLAS).concat(['alimentos', 'proveedores_alimento', 'bodega_stock', 'cobro_visitas', 'cobro_ruta_dia'])) {
+          const filas = []; let desde = 0;
+          for (;;) {
+            const lote = await q(db.from(t).select('*').range(desde, desde + 999));
+            filas.push(...lote); if (lote.length < 1000) break; desde += 1000;
+          }
+          out.tablas[t] = filas;
+        }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
+        a.download = `respaldo-granja-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        est.textContent = `Listo. Se guardaron ${Object.values(out.tablas).reduce((n, x) => n + x.length, 0)} registros.`;
+      } catch (ex) { est.textContent = `No se pudo: ${ex.message || ex}`; }
+      b.disabled = false;
+    });
   }
   cargar();
 }

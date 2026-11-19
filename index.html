@@ -6,6 +6,8 @@
   <title>Granja porcina</title>
   <meta name="description" content="Control de la granja: compras, inventario, ventas, cartera y liquidación.">
   <meta name="theme-color" content="#1F3350">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
@@ -19,7 +21,7 @@
   <div id="app"><p class="cargando" role="status">Cargando…</p></div>
   <div id="avisos" class="avisos" aria-live="polite"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  <script src="js/vendor/supabase-2.45.4.js"></script>
   <!-- config.js lo genera el workflow de GitHub Pages a partir de los Secrets (ver README) -->
   <script src="config.js"></script>
   <script type="module" src="js/main.js"></script>

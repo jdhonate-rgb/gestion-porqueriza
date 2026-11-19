@@ -87,6 +87,10 @@ function pantallaLogin() {
 
   const form = document.getElementById('form-login');
   const err = document.getElementById('login-error');
+  if (sessionStorage.getItem('sesion-cerrada')) {
+    sessionStorage.removeItem('sesion-cerrada');
+    err.textContent = 'Por seguridad cerramos tu sesión después de 30 minutos sin uso. Entra de nuevo.'; err.hidden = false;
+  }
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     err.hidden = true;
@@ -208,6 +212,19 @@ async function arrancar(session) {
   ruta(true);
 }
 
+/* ---------- Seguridad: cierra la sesión si nadie toca la app durante un rato ---------- */
+const MINUTOS_INACTIVIDAD = 30;
+function vigilarInactividad() {
+  let ultimo = Date.now();
+  const marca = () => { ultimo = Date.now(); };
+  ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((e) => window.addEventListener(e, marca, { passive: true }));
+  setInterval(async () => {
+    if (Date.now() - ultimo < MINUTOS_INACTIVIDAD * 60000) return;
+    const { data } = await db.auth.getSession();
+    if (data.session) { await db.auth.signOut(); sessionStorage.setItem('sesion-cerrada', '1'); }
+  }, 60000);
+}
+
 /* ---------- Inicio ---------- */
 (async function init() {
   if (!db) {
@@ -216,6 +233,7 @@ async function arrancar(session) {
     return;
   }
   window.addEventListener('hashchange', () => ruta());
+  vigilarInactividad();
   db.auth.onAuthStateChange((evento, session) => {
     if (evento === 'SIGNED_IN' || evento === 'SIGNED_OUT') setTimeout(() => arrancar(session), 0);
   });
