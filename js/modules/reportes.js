@@ -128,7 +128,7 @@ export async function render({ root, perfil }) {
   }
 
   const TABLAS = {
-    perfiles: 'Usuarios', lotes: 'Lotes', clientes: 'Clientes', compras_cerdos: 'Compra de cerdos', pagos_compra_cerdos: 'Pago de compra de cerdos',
+    auditoria: 'Auditoría', perfiles: 'Usuarios', lotes: 'Lotes', clientes: 'Clientes', compras_cerdos: 'Compra de cerdos', pagos_compra_cerdos: 'Pago de compra de cerdos',
     sacrificios: 'Sacrificio', bajas: 'Bajas', ventas: 'Ventas', venta_items: 'Ítem de venta', pagos_venta: 'Cobro / pago de venta',
     compras_alimento: 'Compra de alimento', movimientos_bodega: 'Bodega', gastos: 'Gastos', gastos_granja: 'Inversión de granja',
     cuentas: 'Cuentas', movimientos_cuenta: 'Movimiento de cuenta', liquidaciones: 'Liquidación', liquidacion_lotes: 'Liquidación por lote',
